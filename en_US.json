@@ -1,0 +1,8 @@
+{
+  "wiis.command.reload" : "Reloading the config",
+  "wiis.command.enable" : "Wiis enabled",
+  "wiis.command.disable" : "Wiis disabled",
+  "wiis.command.resetAll" : "Reset all settings for all mobs.",
+  "wiis.command.reset" : "Reseted",
+  "wiis.command.info" : "This mod is server based and therefore it must be installed on the server,\notherwise it will not work!"
+}
