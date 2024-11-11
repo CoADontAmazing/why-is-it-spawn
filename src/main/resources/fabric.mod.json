@@ -1,0 +1,26 @@
+{
+	"schemaVersion": 1,
+	"id": "wiis",
+	"version": "v1",
+	"name": "WhyIsItSpawn",
+	"description": "Catches the spawn of an unwanted mob when it tries to spawn",
+	"authors": [
+		"CoAmazing",
+		"decheesed"
+	],
+	"license": "ARR",
+	"icon": "assets/wiis/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": ["net.coamazing.wiis.WIIS"]
+	},
+	"mixins": [
+		"wiis.mixins.json"
+	],
+	"depends": {
+		"fabricloader": ">=0.14.24",
+		"minecraft": ">=1.20.1",
+		"java": ">=17",
+		"fabric-api": "*"
+	}
+}
