@@ -1,0 +1,9 @@
+{
+  "gamerule.doUseWIIS": "Использовать WIIS",
+  "wiis-config.no_available": "Пожалуйста, включите WIIS с помощью команды /gamerule для дальнейшей работы! ",
+  "wiis-config.query": "Следующие свойства были найдены в \"%s\" ",
+  "wiis-config.modify": "Свойство \"%s\" %s было установлено на %s",
+  "wiis-config.clear": "Очищены все свойства конфига \"%s\"",
+  "wiis-config.clear_all": "Очищены все свойства конфига", 
+  "wiis-config.info": "WIIS (Why Is It Spawn) %s\n  создали CoAmazing и decheesed\n"
+}

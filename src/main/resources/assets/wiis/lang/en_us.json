@@ -1,0 +1,9 @@
+{
+  "gamerule.doUseWIIS": "Use WIIS",
+  "wiis-config.no_available": "Please enable WIIS with /gamerule command for further work!",
+  "wiis-config.query": "The following properties was found at \"%s\" ",
+  "wiis-config.modify": "The property \"%s\" %s was set to %s",
+  "wiis-config.clear": "Cleared any config properties in \"%s\"",
+  "wiis-config.clear_all": "Cleared any config properties", 
+  "wiis-config.info": "WIIS (Why Is It Spawn) %s\n  created by CoAmazing and decheesed\n"
+}
