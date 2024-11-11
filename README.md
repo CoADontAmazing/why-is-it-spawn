@@ -4,7 +4,7 @@
 The mod **works only on the server side**. To work with the config **in a multiplayer game**, you need ***level 4 permission on the server*** , and also ***WIIS must be enabled in the gamerules***.
 #### Switching WIIS via Gamerules :
 >```
->/gamerule doUseWiis true/false
+>/gamerule doUseWIIS true/false
 >```
 
 #### Commands:
@@ -15,4 +15,4 @@ The mod **works only on the server side**. To work with the config **in a multip
 
 ____
 
-© 2024 CoAmazing & decheesed GNU LGPG
+© GNU GPL v3 2024 CoAmazing & decheesed
