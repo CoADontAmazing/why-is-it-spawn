@@ -1,8 +1,0 @@
-{
-  "wiis.command.reload" : "Конфиг перезагружен",
-  "wiis.command.enable" : "Wiis включен",
-  "wiis.command.disable" : "Wiis выключен",
-  "wiis.command.resetAll" : "Сброс конфига с настройками.",
-  "wiis.command.reset" : "Сброс",
-  "wiis.command.info" : "Этот мод работает только на сервере\n и поэтому его необходимо устанавливать на сервер,\n иначе он не будет работать!"
-}
