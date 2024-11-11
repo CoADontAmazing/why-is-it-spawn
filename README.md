@@ -1,7 +1,7 @@
 ## Project
 >**WIIS** (Why Is It Spawn) is a simple mod for Minecraft that adds the ability to **control the appearance of interfering or problematic mobs**.
 
-The mod **works only on the server side**. To work with the config **in a multiplayer game**, you need ***level 4 permission on the server*** , and also ***WIIS must be enabled in the gamerules***.
+The mod **works only on the server side**. To work with the config **in a multiplayer game**, you need ***level 4 permission[¹](https://minecraft.wiki/w/Permission_level) on the server*** , and also ***WIIS must be enabled in the gamerules***.
 #### Switching WIIS via Gamerules :
 >```
 >/gamerule doUseWIIS true/false
