@@ -11,7 +11,7 @@
   "environment": "server",
   "entrypoints": {
     "main": [
-      "dev.coa.wiis.WIIS"
+      "dev.coa.wiis.fabric.FabricWIIS"
     ]
   },
   "mixins": [
