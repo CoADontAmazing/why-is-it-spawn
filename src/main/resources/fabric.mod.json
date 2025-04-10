@@ -4,11 +4,11 @@
   "version": "${version}",
   "name": "wiis",
   "description": "Catches the spawn of an unwanted mob when it tries to spawn",
-  "authors": [],
+  "authors": ["CoAmazing", "decheesed"],
   "contact": {},
   "license": "GPL-3.0",
   "icon": "assets/wiis/icon.png",
-  "environment": "server",
+  "environment": "*",
   "entrypoints": {
     "main": [
       "dev.coa.wiis.fabric.FabricWIIS"
