@@ -3,11 +3,28 @@ package dev.coa.wiis;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public interface WIIS {
-    String ID = "wiis";
-    String NAME = "Why Is It Spawn";
-    String VERSION = "3";
-    Logger LOGGER = LoggerFactory.getLogger(ID.toUpperCase());
+public abstract class WIIS {
+    protected static WIIS instance;
 
-    void registerCommands();
+    public static final String ID = "wiis";
+    public static final String NAME = "Why Is It Spawn";
+    public static final String VERSION = "3";
+    public static final Logger LOGGER = LoggerFactory.getLogger(ID.toUpperCase());
+
+    public abstract void registerCommands();
+
+    public abstract Config getConfig();
+
+    protected static void setInstance(WIIS instance) {
+        if (WIIS.instance != null) throw new RuntimeException("Unfortunately, it is not possible to replace an already occupied state.");
+        WIIS.instance = instance;
+    }
+
+    public static WIIS getInstance() {
+        return instance;
+    }
+
+    public static <C extends Config> C getConfig(Class<C> type) {
+        return type.cast(getInstance().getConfig());
+    }
 }

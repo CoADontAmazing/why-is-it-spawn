@@ -1,0 +1,22 @@
+{
+  "wiis.unavailable" : "Something went wrong. Ummmm, idk what to say",
+  "wiis.reload": "Plugin config reloaded",
+  "wiis.restore.single": "The entry \"%s\" has been cleared",
+  "wiis.restore.all": "%s entries were cleared",
+  "wiis.restore.with_regex": "For the query \"%s\" %d entries were cleared",
+  "wiis.restore.empty": "No entries. Nothing to clear.",
+  "wiis.enabled.get": "The value of \"enabled\" is§d %s",
+  "wiis.enabled.set": "The \"enabled\" value is set to§d %s",
+  "wiis.permissionLevel.get": "The value of \"permissionLevel\" is§c %d",
+  "wiis.permissionLevel.set": "The \"permissionLevel\" value is set to§c %d",
+  "wiis.autosave.get": "The value of \"autosave\" is§d %s",
+  "wiis.autosave.set": "The \"autosave\" value is set to§d %s",
+  "wiis.query": "All properties of the entry \"%s\" were found: ",
+  "wiis.query.reason": "The value of excluded reason \"%s\" in the \"%s\" entry is§d %s",
+  "wiis.query.reasons": "The following excluded reasons were found in the \"%s\" entry: ",
+  "wiis.modify.reason": "The value of excluded reason \"%s\" in the \"%s\" entry is set to§d %s",
+  "wiis.query.despawnInstantly": "The value of despawnInstantly in the \"%s\" entry is§d %s",
+  "wiis.modify.despawnInstantly": "The value of despawnInstantly in the \"%s\" entry is set to§d %s",
+  "wiis.entry_not_found": "Entry \"%s\" not found",
+  "wiis.info": "\n◼ by CoAmazing & decheesed"
+}
