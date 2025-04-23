@@ -9,8 +9,10 @@ import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import dev.coa.wiis.WIIS;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.minecraft.command.CommandSource;
 import net.minecraft.command.argument.EntityArgumentType;
+import net.minecraft.command.argument.IdentifierArgumentType;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.SpawnReason;
@@ -36,9 +38,18 @@ import static net.minecraft.server.command.CommandManager.*;
 public class FabricWIIS extends WIIS implements ModInitializer {
     public static Config CONFIG = new Config();
 
+    public static void debug(String s) {
+        if (CONFIG.debug) LOGGER.info("[" + ID.toUpperCase() + "]: " + s);
+    }
+
     @Override
     public void onInitialize() {
         setInstance(this);
+        LOGGER.info("[" + ID.toUpperCase() + "]: init...");
+        ServerLifecycleEvents.SERVER_STARTED.register(server -> CONFIG = Config.load(getConfigPath(server), Config.class));
+        ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
+            if (CONFIG.autosave) CONFIG.save(getConfigPath(server));
+        });
         registerCommands();
     }
 
@@ -70,73 +81,105 @@ public class FabricWIIS extends WIIS implements ModInitializer {
                             )
                             .then(literal("query").requires(FabricWIIS::hasPermission)
                                     .then(argument("entry", StringArgumentType.string())
+                                            .executes(context -> query(context, 0,-1))
+                                            .then(literal("exclude-reason")
+                                                    .executes(context -> query(context, 0,0))
+                                                    .then(argument("reasonKey", StringArgumentType.word())
+                                                            .suggests((context, builder) -> CommandSource.suggestMatching(Arrays.stream(SpawnReason.values()).map(reason -> Config.toKebabCase(reason.toString())), builder))
+                                                            .executes(context -> query(context, 0,-2))
+                                                    )
+                                            )
+                                            .then(literal("despawnInstantly")
+                                                    .executes(context -> query(context, 0, 2))
+                                            )
+                                    )
+                                    .then(argument("type", IdentifierArgumentType.identifier())
                                             .suggests((context, builder) -> CommandSource.suggestMatching(Registries.ENTITY_TYPE.stream().map(type -> EntityType.getId(type).toString()), builder))
-                                            .executes(context -> query(context, true,-1))
-                                            .then(literal("reason")
-                                                    .executes(context -> query(context, true,0))
+                                            .executes(context -> query(context, 1,-1))
+                                            .then(literal("exclude-reason")
+                                                    .executes(context -> query(context, 1,0))
                                                     .then(argument("reasonKey", StringArgumentType.word())
                                                             .suggests((context, builder) -> CommandSource.suggestMatching(Arrays.stream(SpawnReason.values()).map(reason -> Config.toKebabCase(reason.toString())), builder))
-                                                            .executes(context -> query(context, true,-2))
+                                                            .executes(context -> query(context, 1,-2))
                                                     )
                                             )
                                             .then(literal("despawnInstantly")
-                                                    .executes(context -> query(context, true, 2))
+                                                    .executes(context -> query(context, 1, 2))
                                             )
-                                    ).then(argument("mob", EntityArgumentType.entity())
-                                            .executes(context -> query(context, false,-1))
-                                            .then(literal("reason")
-                                                    .executes(context -> query(context, false,0))
+                                    )
+                                    .then(argument("mob", EntityArgumentType.entity())
+                                            .executes(context -> query(context, 2,-1))
+                                            .then(literal("exclude-reason")
+                                                    .executes(context -> query(context, 2,0))
                                                     .then(argument("reasonKey", StringArgumentType.word())
                                                             .suggests((context, builder) -> CommandSource.suggestMatching(Arrays.stream(SpawnReason.values()).map(reason -> Config.toKebabCase(reason.toString())), builder))
-                                                            .executes(context -> query(context,false, -2))
+                                                            .executes(context -> query(context,2, -2))
                                                     )
                                             )
                                             .then(literal("despawnInstantly")
-                                                    .executes(context -> query(context, false,2))
+                                                    .executes(context -> query(context, 2,2))
                                             )
                                     )
                             )
                             .then(literal("modify").requires(FabricWIIS::hasPermission)
                                     .then(argument("entry", StringArgumentType.string())
-                                            .suggests((context, builder) -> CommandSource.suggestMatching(Registries.ENTITY_TYPE.stream().map(type -> EntityType.getId(type).toString()), builder))
-                                            .then(literal("reason")
+                                            .then(literal("exclude-reason")
                                                     .then(argument("reasonKey", StringArgumentType.word())
                                                             .suggests((context, builder) -> CommandSource.suggestMatching(Arrays.stream(SpawnReason.values()).map(reason -> Config.toKebabCase(reason.toString())), builder))
                                                             .then(argument("exclude", BoolArgumentType.bool())
-                                                                    .executes(context -> modify(context, true,0))
+                                                                    .executes(context -> modify(context, 0,0))
                                                             )
                                                     )
                                             )
                                             .then(literal("despawnInstantly")
                                                     .then(argument("enable", BoolArgumentType.bool())
-                                                            .executes(context -> modify(context, true,2))
+                                                            .executes(context -> modify(context, 0,2))
+                                                    )
+                                            )
+                                    )
+                                    .then(argument("type", IdentifierArgumentType.identifier())
+                                            .suggests((context, builder) -> CommandSource.suggestMatching(Registries.ENTITY_TYPE.stream().map(type -> EntityType.getId(type).toString()), builder))
+                                            .then(literal("exclude-reason")
+                                                    .then(argument("reasonKey", StringArgumentType.word())
+                                                            .suggests((context, builder) -> CommandSource.suggestMatching(Arrays.stream(SpawnReason.values()).map(reason -> Config.toKebabCase(reason.toString())), builder))
+                                                            .then(argument("exclude", BoolArgumentType.bool())
+                                                                    .executes(context -> modify(context, 1,0))
+                                                            )
+                                                    )
+                                            )
+                                            .then(literal("despawnInstantly")
+                                                    .then(argument("enable", BoolArgumentType.bool())
+                                                            .executes(context -> modify(context, 1,2))
                                                     )
                                             )
                                     )
                                     .then(argument("mob", EntityArgumentType.entity())
-                                            .then(literal("reason")
+                                            .then(literal("exclude-reason")
                                                     .then(argument("reasonKey", StringArgumentType.word())
                                                             .suggests((context, builder) -> CommandSource.suggestMatching(Arrays.stream(SpawnReason.values()).map(reason -> Config.toKebabCase(reason.toString())), builder))
                                                             .then(argument("exclude", BoolArgumentType.bool())
-                                                                    .executes(context -> modify(context, false,0))
+                                                                    .executes(context -> modify(context, 2,0))
                                                             )
                                                     )
                                             )
                                             .then(literal("despawnInstantly")
                                                     .then(argument("enable", BoolArgumentType.bool())
-                                                            .executes(context -> modify(context, false,2))
+                                                            .executes(context -> modify(context, 2,2))
                                                     )
                                             )
                                     )
                             )
                             .then(literal("restore").requires(FabricWIIS::hasPermission)
-                                    .executes(context -> restore(context, true, true))
+                                    .executes(context -> restore(context, 0, true))
                                     .then(argument("path", StringArgumentType.string())
+                                            .executes(context -> restore(context, 0, false))
+                                    )
+                                    .then(argument("type", IdentifierArgumentType.identifier())
                                             .suggests((context, builder) -> CommandSource.suggestMatching(Registries.ENTITY_TYPE.stream().map(type -> EntityType.getId(type).toString()), builder))
-                                            .executes(context -> restore(context, true, false))
+                                            .executes(context -> restore(context, 1, false))
                                     )
                                     .then(argument("mob", EntityArgumentType.entity())
-                                            .executes(context -> restore(context, false,false))
+                                            .executes(context -> restore(context, 2,false))
                                     )
                             )
             );
@@ -159,8 +202,8 @@ public class FabricWIIS extends WIIS implements ModInitializer {
         return 0;
     }
 
-    private static int query(CommandContext<ServerCommandSource> context, boolean string, int mode) throws CommandSyntaxException {
-        String entryId = string? StringArgumentType.getString(context, "entry") : EntityType.getId(EntityArgumentType.getEntity(context, "mob").getType()).toString();
+    private static int query(CommandContext<ServerCommandSource> context, int type, int mode) throws CommandSyntaxException {
+        String entryId = type == 0? StringArgumentType.getString(context, "entry") : type == 1? IdentifierArgumentType.getIdentifier(context, "type").toString() : EntityType.getId(EntityArgumentType.getEntity(context, "mob").getType()).toString();
         Config.Entry entry = CONFIG.entities.get(entryId);
         if (entry == null) {
             context.getSource().sendMessage(ENTRY_NOT_FOUND_TEXT.apply(entryId));
@@ -185,8 +228,8 @@ public class FabricWIIS extends WIIS implements ModInitializer {
         return 1;
     }
 
-    private static int modify(CommandContext<ServerCommandSource> context, boolean string, int mode) throws CommandSyntaxException {
-        String entryId = string? StringArgumentType.getString(context, "entry") : EntityType.getId(EntityArgumentType.getEntity(context, "mob").getType()).toString();
+    private static int modify(CommandContext<ServerCommandSource> context, int type, int mode) throws CommandSyntaxException {
+        String entryId = type == 0? StringArgumentType.getString(context, "entry") : type == 1? IdentifierArgumentType.getIdentifier(context, "type").toString() : EntityType.getId(EntityArgumentType.getEntity(context, "mob").getType()).toString();
         Config.Entry entry = CONFIG.entities.computeIfAbsent(entryId, key -> new Config.Entry(false));
 
         if (mode == 0) {
@@ -207,7 +250,7 @@ public class FabricWIIS extends WIIS implements ModInitializer {
         return 1;
     }
 
-    private static int restore(CommandContext<ServerCommandSource> context, boolean string, boolean all) {
+    private static int restore(CommandContext<ServerCommandSource> context, int type, boolean all) {
         if (all) {
             int count = CONFIG.entities.size();
             CONFIG.entities.clear();
@@ -217,7 +260,7 @@ public class FabricWIIS extends WIIS implements ModInitializer {
         } else {
             String path = "";
             try {
-                path = string? StringArgumentType.getString(context, "path") : EntityType.getId(EntityArgumentType.getEntity(context, "mob").getType()).toString();
+                path = type == 0? StringArgumentType.getString(context, "entry") : type == 1? IdentifierArgumentType.getIdentifier(context, "type").toString() : EntityType.getId(EntityArgumentType.getEntity(context, "mob").getType()).toString();
             } catch (CommandSyntaxException e) {
                 throw new RuntimeException(e);
             }
@@ -278,7 +321,7 @@ public class FabricWIIS extends WIIS implements ModInitializer {
     }
 
     public static Path getConfigPath(MinecraftServer server) {
-        return server.getSavePath(WorldSavePath.ROOT).resolve("wiis/config.json");
+        return server.getSavePath(WorldSavePath.ROOT).resolve(getConfigLocation());
     }
 
     public static class Config extends dev.coa.wiis.Config {

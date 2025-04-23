@@ -2,8 +2,6 @@ package dev.coa.wiis;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import com.google.gson.JsonObject;
-import net.minecraft.entity.SpawnReason;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -19,7 +17,7 @@ public class Config {
 
     public boolean enabled;
     public boolean autosave = true;
-    public boolean debug;
+    public boolean debug = false;
     public int permissionLevel = 4;
 
     public final Map<String, Entry> entities = new HashMap<>();
@@ -38,7 +36,7 @@ public class Config {
             try (final BufferedReader reader = Files.newBufferedReader(path)) {
                 return GSON.fromJson(reader, type);
             } catch (Exception ex) {
-                WIIS.LOGGER.warn("[" + WIIS.ID.toUpperCase() + "] ", ex);
+                WIIS.LOGGER.warn("[" + WIIS.ID.toUpperCase() + "]: ", ex);
             }
         }
         return type.cast(new Config());
@@ -71,7 +69,7 @@ public class Config {
         for (Map.Entry<String, Entry> entry : entities.entrySet()) {
             if (validate(entry.getKey(), id)) {
                 Entry idEntry = entry.getValue();
-                return !idEntry.despawnInstantly && !idEntry.excludedReasons.contains(reason) /*&& !idEntry.excludedWorlds.contains(world)/* && !nbtPredicate.test(idEntry.excludedNbt)*/;
+                return !(idEntry.despawnInstantly || idEntry.excludedReasons.contains(reason) || idEntry.excludedWorlds.contains(world))/* && !nbtPredicate.test(idEntry.excludedNbt)*/;
             }
         }
         return true;
@@ -97,18 +95,18 @@ public class Config {
             GSON.toJson(this, writer);
             writer.close();
         } catch (Exception ex) {
-            WIIS.LOGGER.warn("[" + WIIS.ID.toUpperCase() + "] ", ex);
+            WIIS.LOGGER.warn("[" + WIIS.ID.toUpperCase() + "]: ", ex);
         }
     }
 
     public static final class Entry {
         private final List<String> excludedReasons;
-        //private final List<String> excludedWorlds;
+        private final List<String> excludedWorlds;
         private Boolean despawnInstantly;
 
         public Entry(List<String> excludedReasons, List<String> excludedWorlds/*, List<String> excludedNbt*/, Boolean despawnInstantly) {
             this.excludedReasons = excludedReasons;
-            //this.excludedWorlds = excludedWorlds;
+            this.excludedWorlds = excludedWorlds;
             this.despawnInstantly = despawnInstantly;
         }
 
@@ -134,9 +132,9 @@ public class Config {
             return excludedReasons;
         }
 
-//        public List<String> excludedWorlds() {
-//            return excludedWorlds;
-//        }
+        public List<String> excludedWorlds() {
+            return excludedWorlds;
+        }
 
         public Boolean despawnInstantly() {
             return despawnInstantly;
@@ -152,7 +150,7 @@ public class Config {
             if (obj == null || obj.getClass() != this.getClass()) return false;
             var that = (Entry) obj;
             return Objects.equals(this.excludedReasons, that.excludedReasons) &&
-                    //Objects.equals(this.excludedWorlds, that.excludedWorlds) &&
+                    Objects.equals(this.excludedWorlds, that.excludedWorlds) &&
                     Objects.equals(this.despawnInstantly, that.despawnInstantly);
         }
 
@@ -160,33 +158,13 @@ public class Config {
         public String toString() {
             return "Entry[" +
                     "excludedReasons=" + excludedReasons + ", " +
-                    //"excludedWorlds=" + excludedWorlds + ", " +
+                    "excludedWorlds=" + excludedWorlds + ", " +
                     "despawnInstantly=" + despawnInstantly + ']';
         }
     }
 
     public static void main(String[] args) {
-        Config config = new Config();
-
-        Entry entry = new Entry(false);
-
-        entry.excludeReason(SpawnReason.NATURAL, true);
-        entry.excludeReason(SpawnReason.EVENT, true);
-        entry.excludeReason(SpawnReason.SPAWN_EGG, true);
-        entry.excludeReason(SpawnReason.COMMAND, true);
-        entry.excludeReason("hello", true);
-
-      //  entry.excludedWorlds.add("minecraft:overworld");
-
-        config.entities.put("minecraft:pigman", entry);
-
-        JsonObject jsonObject = GSON.toJsonTree(config).getAsJsonObject();
-
-        System.out.println(GSON.toJson(config));
-
-        Config config1 = GSON.fromJson(jsonObject, Config.class);
-        config1.entities.get("minecraft:pigman").excludeReason("hello", false);
-
-        System.out.println(!config1.allowSpawn("minecraft:pigman", "hello", "minecraft:overworld"));
+        Config config1 = GSON.fromJson("{\"enabled\": true, \"autosave\": true, \"debug\": false, \"permissionLevel\": 4, \"entities\": {\"minecraft:axolotl\": { \"excludedReasons\": [\"natural\", \"breeding\"], \"despawnInstantly\": true} } }", Config.class);
+        System.out.println(!config1.allowSpawn("minecraft:axolotl", null, null));
     }
 }

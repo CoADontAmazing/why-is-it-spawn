@@ -13,16 +13,16 @@ import org.spongepowered.asm.mixin.injection.callback.*;
 public abstract class MobEntityMixin {
 	@Inject(method = "initialize", at = @At("HEAD"), cancellable = true)
 	private void wiis$init(ServerWorldAccess swa, LocalDifficulty d, SpawnReason reason, EntityData ed, NbtCompound nbt, CallbackInfoReturnable<EntityData> cir) {
-		if (!FabricWIIS.CONFIG.allowSpawn((MobEntity) (Object) this, reason, getMobWorld())) {
-			//WIIS.debug("debug at: MobEntity.initialize() mob: " + (MobEntity) (Object) this + ", spawnReason: " + reason + " removed");
-			((MobEntity) (Object) this).remove(Entity.RemovalReason.DISCARDED);
+		if (FabricWIIS.isEnabled() && !FabricWIIS.CONFIG.allowSpawn((MobEntity) (Object) this, reason, getMobWorld())) {
+			FabricWIIS.debug("at: MobEntity.initialize(mob: " + this + ", spawnReason: " + reason + ") removed");
+			((MobEntity) (Object) this).discard();
 		}
 	}
 
 	@Inject(method = "checkDespawn", at = @At("HEAD"), cancellable = true)
 	private void wiis$tryDespawn(CallbackInfo i) {
-		if (!FabricWIIS.CONFIG.allowSpawn((MobEntity) (Object) this, null, getMobWorld())) {
-			//WIIS.debug("debug at: MobEntity.checkDespawn() mob: " + (MobEntity) (Object) this + " removed");
+		if (FabricWIIS.isEnabled() && !FabricWIIS.CONFIG.allowSpawn((MobEntity) (Object) this, null, getMobWorld())) {
+			FabricWIIS.debug("at: MobEntity.checkDespawn(mob: " + this + ") removed");
 			((MobEntity) (Object) this).discard();
 			i.cancel();
 		}

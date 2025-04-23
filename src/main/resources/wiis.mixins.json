@@ -3,7 +3,11 @@
   "minVersion": "0.8",
   "package": "dev.coa.wiis.fabric.mixin",
   "compatibilityLevel": "JAVA_17",
-  "mixins": [],
+  "mixins": [
+    "EntityTypeMixin",
+    "ServerWorldMixin",
+    "MobEntityMixin"
+  ],
   "client": [],
   "injectors": {
     "defaultRequire": 1

@@ -4,7 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public abstract class WIIS {
-    protected static WIIS instance;
+    private static WIIS instance;
 
     public static final String ID = "wiis";
     public static final String NAME = "Why Is It Spawn";
@@ -26,5 +26,9 @@ public abstract class WIIS {
 
     public static <C extends Config> C getConfig(Class<C> type) {
         return type.cast(getInstance().getConfig());
+    }
+
+    public static String getConfigLocation() {
+        return "wiis/config.json";
     }
 }
