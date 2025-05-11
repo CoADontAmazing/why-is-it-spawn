@@ -12,12 +12,11 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(EntityType.class)
 public class EntityTypeMixin {
-	@SuppressWarnings("rawtypes")
-    @Inject(method = "create", at = @At("HEAD"), cancellable = true)
+	@Inject(method = "create", at = @At("HEAD"), cancellable = true)
 	private <T extends Entity> void wiis$create(ServerWorld world, NbtCompound itemNbt, Consumer<T> afterConsumer,
 			BlockPos pos, SpawnReason reason, boolean alignPosition, boolean invertY, CallbackInfoReturnable<T> ci) {
-		if (FabricWIIS.isEnabled() && !FabricWIIS.CONFIG.allowSpawn((EntityType) (Object) this, reason, world)) {
-			FabricWIIS.debug("at: EntityType.create(type: " + EntityType.getId((EntityType) (Object) this) + ", spawnReason: " + reason + ") removed");
+		if (FabricWIIS.isEnabled() && !FabricWIIS.CONFIG.allowSpawn(EntityType.class.cast(this), reason, world, world.getBiome(pos).getKey().get())) {
+			FabricWIIS.debug("at: EntityType.create(type: " + EntityType.getId(EntityType.class.cast(this)) + ", spawnReason: " + reason + ") removed");
 			ci.setReturnValue(null);
 		}
 	}

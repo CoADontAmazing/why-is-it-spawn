@@ -9,7 +9,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.function.Consumer;
-//import java.util.function.Predicate;
+
+import static dev.coa.wiis.WIIS.*;
 
 public class Config {
     public static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
@@ -36,7 +37,7 @@ public class Config {
             try (final BufferedReader reader = Files.newBufferedReader(path)) {
                 return GSON.fromJson(reader, type);
             } catch (Exception ex) {
-                WIIS.LOGGER.warn("[" + WIIS.ID.toUpperCase() + "]: ", ex);
+                LOGGER.warn("[" + ID.toUpperCase() + "]: ", ex);
             }
         }
         return type.cast(new Config());
@@ -65,27 +66,13 @@ public class Config {
         }
     }
 
-    public boolean allowSpawn(String id, String reason, String world/*, Predicate<List<String>> nbtPredicate*/) {
+    public boolean allowSpawn(String id, Object reason, Object world, Object biome) {
         for (Map.Entry<String, Entry> entry : entities.entrySet()) {
-            if (validate(entry.getKey(), id)) {
-                Entry idEntry = entry.getValue();
-                return !(idEntry.despawnInstantly || idEntry.excludedReasons.contains(reason) || idEntry.excludedWorlds.contains(world))/* && !nbtPredicate.test(idEntry.excludedNbt)*/;
-            }
+            if (validate(entry.getKey(), id))
+                return entry.getValue().allowSpawn(reason, world, biome);
         }
         return true;
     }
-
-    public boolean allowSpawn(String id, Object reason, String world/*, Predicate<List<String>> nbtPredicate*/) {
-        return allowSpawn(id, reason == null? null: toKebabCase(reason.toString()), world/*, nbtPredicate*/);
-    }
-
-//    public boolean allowSpawn(String id, String reason) {
-//        return allowSpawn(id, reason, /*nbt -> false*/);
-//    }
-//
-//    public boolean allowSpawn(String id, Object reason) {
-//        return allowSpawn(id, reason, /*nbt -> false*/);
-//    }
 
     public void save(Path path) {
         if (path == null) return;
@@ -95,76 +82,114 @@ public class Config {
             GSON.toJson(this, writer);
             writer.close();
         } catch (Exception ex) {
-            WIIS.LOGGER.warn("[" + WIIS.ID.toUpperCase() + "]: ", ex);
+            LOGGER.warn("[" + ID.toUpperCase() + "]: ", ex);
         }
     }
 
-    public static final class Entry {
-        private final List<String> excludedReasons;
-        private final List<String> excludedWorlds;
-        private Boolean despawnInstantly;
+    public static class World extends ElementSettings {
+        public Map<String, Biome> biomes;
 
-        public Entry(List<String> excludedReasons, List<String> excludedWorlds/*, List<String> excludedNbt*/, Boolean despawnInstantly) {
-            this.excludedReasons = excludedReasons;
-            this.excludedWorlds = excludedWorlds;
-            this.despawnInstantly = despawnInstantly;
+        public World() {
+            this(new HashMap<>());
         }
 
-        public Entry(List<String> excludedReasons, Boolean despawnInstantly) {
-                this(excludedReasons, new ArrayList<>(), despawnInstantly);
+        public World(Map<String, Biome> biomes) {
+            this.biomes = new HashMap<>(biomes);
         }
 
-        public Entry(Boolean despawnInstantly) {
-            this(new ArrayList<>(), despawnInstantly);
+        public Biome newBiome(String name) {
+            Biome biome = new Biome();
+            if (biomes == null) this.biomes = new HashMap<>();
+            biomes.put(name, biome);
+            return biome;
         }
 
-        public void excludeReason(String reason, boolean exclude) {
+        public void removeBiome(String name) {
+            if (biomes != null) biomes.remove(name);
+        }
+
+        public boolean allowSpawn(Object reason, Object biome) {
+            if (biome != null) biome = biome.toString();
+            if (biomes != null && (biome == null? "" : biome.toString()).startsWith(REGEX_TAG))
+                for (Map.Entry<String, Biome> entry : biomes.entrySet())
+                    if (validate(entry.getKey(), biome.toString())) return allowSpawn(reason) && (biomes.containsKey(biome) ? biomes.get(biome).allowSpawn(reason) : true);
+            return allowSpawn(reason) && (biomes != null && biomes.containsKey(biome) ? biomes.get(biome).allowSpawn(reason) : true);
+        }
+
+        public static class Biome extends ElementSettings {}
+    }
+
+    public static class Entry extends ElementSettings {
+        public Map<String, World> worlds;
+
+        public Entry() {
+            this(new HashMap<>());
+        }
+
+        public Entry(Map<String, World> worlds) {
+            this.worlds = worlds;
+        }
+
+        public World newWorld(String name) {
+            World world = new World();
+            if (worlds == null) this.worlds = new HashMap<>();
+            worlds.put(name, world);
+            return world;
+        }
+
+        public World.Biome newBiome(String worldName, String biomeName) {
+            World world = worlds.containsKey(worldName)? worlds.get(worldName) : newWorld(worldName);
+            return world.newBiome(biomeName);
+        }
+
+        public void removeWorld(String name) {
+            if (worlds != null) worlds.remove(name);
+        }
+
+        public boolean allowSpawn(Object reason, Object world, Object biome) {
+            if (world != null) world = world.toString();
+            if (worlds != null && (world == null? "" : world.toString()).startsWith(REGEX_TAG))
+                for (Map.Entry<String, World> entry : worlds.entrySet())
+                    if (validate(entry.getKey(), world.toString())) return allowSpawn(reason) && (worlds.containsKey(world)? worlds.get(world).allowSpawn(reason, biome) : true);
+            return allowSpawn(reason) && (worlds.containsKey(world)? worlds.get(world).allowSpawn(reason, biome) : true);
+        }
+    }
+
+    public static abstract class ElementSettings {
+        private List<String> discardReasons;
+        public Float chance;
+        public Boolean discard;
+
+        public void discardReason(Object reason, boolean add) {
             if (reason == null) return;
-            if (exclude) excludedReasons.add(reason);
-            else excludedReasons.remove(reason);
+            if (discardReasons == null) discardReasons = new ArrayList<>();
+            reason = toKebabCase(reason.toString());
+            if (add) discardReasons.add(reason.toString());
+            else discardReasons.remove(reason.toString());
         }
 
-        public void excludeReason(Object object, boolean exclude) {
-            excludeReason(object == null ? null : toKebabCase(object.toString()), exclude);
+        public boolean isDiscarded(Object reason) {
+            if (reason == null) return false;
+            if (discardReasons == null) return false;
+            reason = toKebabCase(reason.toString());
+            return discardReasons.contains(reason.toString());
         }
 
-        public List<String> excludedReasons() {
-            return excludedReasons;
+        public List<String> discardReasons() {
+            return List.copyOf(discardReasons);
         }
 
-        public List<String> excludedWorlds() {
-            return excludedWorlds;
+        public boolean isDiscarded() {
+            return discard != null && discard;
         }
 
-        public Boolean despawnInstantly() {
-            return despawnInstantly;
+        public float chance() {
+            return chance != null? chance : 1f;
         }
 
-        public void despawnInstantly(Boolean enable) {
-            this.despawnInstantly = enable;
+        public boolean allowSpawn(Object reason) {
+            if (isDiscarded()) return false;
+            return (chance == null? true : Math.random() <= chance) && !isDiscarded(reason);
         }
-
-        @Override
-        public boolean equals(Object obj) {
-            if (obj == this) return true;
-            if (obj == null || obj.getClass() != this.getClass()) return false;
-            var that = (Entry) obj;
-            return Objects.equals(this.excludedReasons, that.excludedReasons) &&
-                    Objects.equals(this.excludedWorlds, that.excludedWorlds) &&
-                    Objects.equals(this.despawnInstantly, that.despawnInstantly);
-        }
-
-        @Override
-        public String toString() {
-            return "Entry[" +
-                    "excludedReasons=" + excludedReasons + ", " +
-                    "excludedWorlds=" + excludedWorlds + ", " +
-                    "despawnInstantly=" + despawnInstantly + ']';
-        }
-    }
-
-    public static void main(String[] args) {
-        Config config1 = GSON.fromJson("{\"enabled\": true, \"autosave\": true, \"debug\": false, \"permissionLevel\": 4, \"entities\": {\"minecraft:axolotl\": { \"excludedReasons\": [\"natural\", \"breeding\"], \"despawnInstantly\": true} } }", Config.class);
-        System.out.println(!config1.allowSpawn("minecraft:axolotl", null, null));
     }
 }

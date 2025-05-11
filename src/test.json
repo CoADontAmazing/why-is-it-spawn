@@ -1,0 +1,23 @@
+{
+  "minecraft:pig": {
+    "*": {
+      "discard-reasons": ["spawn-egg"],
+      "discard": true
+    },
+    "minecraft:.*": {
+      "biomes": {
+        "minecraft:.*": {
+          "discard-reasons": ["spawn-egg"]
+        }
+      },
+
+      "chance": 3.4,
+      "discard": false
+    }
+  },
+  "minecraft:cow": {
+    "minecraft:overworld": {
+      "discard": true
+    }
+  }
+}

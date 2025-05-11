@@ -1,8 +1,10 @@
 package dev.coa.wiis.fabric;
 
 import com.mojang.brigadier.arguments.BoolArgumentType;
+import com.mojang.brigadier.arguments.FloatArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
+import com.mojang.brigadier.builder.ArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 
@@ -18,6 +20,7 @@ import net.minecraft.entity.EntityType;
 import net.minecraft.entity.SpawnReason;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.registry.Registries;
+import net.minecraft.registry.RegistryKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.text.ClickEvent;
@@ -27,7 +30,7 @@ import net.minecraft.util.Formatting;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.WorldSavePath;
 import net.minecraft.util.math.MathHelper;
-import net.minecraft.world.World;
+import net.minecraft.world.biome.Biome;
 
 import java.nio.file.Path;
 import java.util.*;
@@ -39,13 +42,13 @@ public class FabricWIIS extends WIIS implements ModInitializer {
     public static Config CONFIG = new Config();
 
     public static void debug(String s) {
-        if (CONFIG.debug) LOGGER.info("[" + ID.toUpperCase() + "]: " + s);
+        if (CONFIG.debug) LOGGER.info("[{}]: {}", ID.toUpperCase(), s);
     }
 
     @Override
     public void onInitialize() {
         setInstance(this);
-        LOGGER.info("[" + ID.toUpperCase() + "]: init...");
+        LOGGER.info("[{}]: init...", ID.toUpperCase());
         ServerLifecycleEvents.SERVER_STARTED.register(server -> CONFIG = Config.load(getConfigPath(server), Config.class));
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
             if (CONFIG.autosave) CONFIG.save(getConfigPath(server));
@@ -55,7 +58,7 @@ public class FabricWIIS extends WIIS implements ModInitializer {
 
     @Override
     public void registerCommands() {
-        CommandRegistrationCallback.EVENT.register(((dispatcher, access, env) -> {
+        CommandRegistrationCallback.EVENT.register(((dispatcher, access, env) ->
             dispatcher.register(
                     literal("wiis").executes(FabricWIIS::info)
                             .then(literal("reload").requires(FabricWIIS::hasPermission)
@@ -80,93 +83,39 @@ public class FabricWIIS extends WIIS implements ModInitializer {
                                     )
                             )
                             .then(literal("query").requires(FabricWIIS::hasPermission)
-                                    .then(argument("entry", StringArgumentType.string())
-                                            .executes(context -> query(context, 0,-1))
-                                            .then(literal("exclude-reason")
-                                                    .executes(context -> query(context, 0,0))
-                                                    .then(argument("reasonKey", StringArgumentType.word())
-                                                            .suggests((context, builder) -> CommandSource.suggestMatching(Arrays.stream(SpawnReason.values()).map(reason -> Config.toKebabCase(reason.toString())), builder))
-                                                            .executes(context -> query(context, 0,-2))
-                                                    )
-                                            )
-                                            .then(literal("despawnInstantly")
-                                                    .executes(context -> query(context, 0, 2))
-                                            )
+                                    .then(
+                                            createQuerySettings(argument("entry", StringArgumentType.string()), context -> StringArgumentType.getString(context, "entry"))
                                     )
-                                    .then(argument("type", IdentifierArgumentType.identifier())
-                                            .suggests((context, builder) -> CommandSource.suggestMatching(Registries.ENTITY_TYPE.stream().map(type -> EntityType.getId(type).toString()), builder))
-                                            .executes(context -> query(context, 1,-1))
-                                            .then(literal("exclude-reason")
-                                                    .executes(context -> query(context, 1,0))
-                                                    .then(argument("reasonKey", StringArgumentType.word())
-                                                            .suggests((context, builder) -> CommandSource.suggestMatching(Arrays.stream(SpawnReason.values()).map(reason -> Config.toKebabCase(reason.toString())), builder))
-                                                            .executes(context -> query(context, 1,-2))
-                                                    )
-                                            )
-                                            .then(literal("despawnInstantly")
-                                                    .executes(context -> query(context, 1, 2))
-                                            )
+                                    .then(
+                                            createQuerySettings(argument("type", IdentifierArgumentType.identifier()), context -> IdentifierArgumentType.getIdentifier(context, "type").toString())
+                                                    .suggests((context, builder) -> CommandSource.suggestMatching(Registries.ENTITY_TYPE.stream().map(type -> EntityType.getId(type).toString()), builder))
                                     )
-                                    .then(argument("mob", EntityArgumentType.entity())
-                                            .executes(context -> query(context, 2,-1))
-                                            .then(literal("exclude-reason")
-                                                    .executes(context -> query(context, 2,0))
-                                                    .then(argument("reasonKey", StringArgumentType.word())
-                                                            .suggests((context, builder) -> CommandSource.suggestMatching(Arrays.stream(SpawnReason.values()).map(reason -> Config.toKebabCase(reason.toString())), builder))
-                                                            .executes(context -> query(context,2, -2))
-                                                    )
-                                            )
-                                            .then(literal("despawnInstantly")
-                                                    .executes(context -> query(context, 2,2))
-                                            )
+                                    .then(
+                                            createQuerySettings(argument("mob", EntityArgumentType.entity()), context -> {
+                                                try {
+                                                    return EntityType.getId(EntityArgumentType.getEntity(context, "mob").getType()).toString();
+                                                } catch (CommandSyntaxException e) {
+                                                    throw new RuntimeException(e);
+                                                }
+                                            })
                                     )
                             )
                             .then(literal("modify").requires(FabricWIIS::hasPermission)
-                                    .then(argument("entry", StringArgumentType.string())
-                                            .then(literal("exclude-reason")
-                                                    .then(argument("reasonKey", StringArgumentType.word())
-                                                            .suggests((context, builder) -> CommandSource.suggestMatching(Arrays.stream(SpawnReason.values()).map(reason -> Config.toKebabCase(reason.toString())), builder))
-                                                            .then(argument("exclude", BoolArgumentType.bool())
-                                                                    .executes(context -> modify(context, 0,0))
-                                                            )
-                                                    )
-                                            )
-                                            .then(literal("despawnInstantly")
-                                                    .then(argument("enable", BoolArgumentType.bool())
-                                                            .executes(context -> modify(context, 0,2))
-                                                    )
-                                            )
+                                    .then(
+                                            createModifySettings(argument("entry", StringArgumentType.string()), context -> StringArgumentType.getString(context, "entry"))
                                     )
-                                    .then(argument("type", IdentifierArgumentType.identifier())
-                                            .suggests((context, builder) -> CommandSource.suggestMatching(Registries.ENTITY_TYPE.stream().map(type -> EntityType.getId(type).toString()), builder))
-                                            .then(literal("exclude-reason")
-                                                    .then(argument("reasonKey", StringArgumentType.word())
-                                                            .suggests((context, builder) -> CommandSource.suggestMatching(Arrays.stream(SpawnReason.values()).map(reason -> Config.toKebabCase(reason.toString())), builder))
-                                                            .then(argument("exclude", BoolArgumentType.bool())
-                                                                    .executes(context -> modify(context, 1,0))
-                                                            )
-                                                    )
-                                            )
-                                            .then(literal("despawnInstantly")
-                                                    .then(argument("enable", BoolArgumentType.bool())
-                                                            .executes(context -> modify(context, 1,2))
-                                                    )
-                                            )
+                                    .then(
+                                            createModifySettings(argument("type", IdentifierArgumentType.identifier()), context -> IdentifierArgumentType.getIdentifier(context, "type").toString())
+                                                    .suggests((context, builder) -> CommandSource.suggestMatching(Registries.ENTITY_TYPE.stream().map(type -> EntityType.getId(type).toString()), builder))
                                     )
-                                    .then(argument("mob", EntityArgumentType.entity())
-                                            .then(literal("exclude-reason")
-                                                    .then(argument("reasonKey", StringArgumentType.word())
-                                                            .suggests((context, builder) -> CommandSource.suggestMatching(Arrays.stream(SpawnReason.values()).map(reason -> Config.toKebabCase(reason.toString())), builder))
-                                                            .then(argument("exclude", BoolArgumentType.bool())
-                                                                    .executes(context -> modify(context, 2,0))
-                                                            )
-                                                    )
-                                            )
-                                            .then(literal("despawnInstantly")
-                                                    .then(argument("enable", BoolArgumentType.bool())
-                                                            .executes(context -> modify(context, 2,2))
-                                                    )
-                                            )
+                                    .then(
+                                            createModifySettings(argument("mob", EntityArgumentType.entity()), context -> {
+                                                try {
+                                                    return EntityType.getId(EntityArgumentType.getEntity(context, "mob").getType()).toString();
+                                                } catch (CommandSyntaxException e) {
+                                                    throw new RuntimeException(e);
+                                                }
+                                            })
                                     )
                             )
                             .then(literal("restore").requires(FabricWIIS::hasPermission)
@@ -182,12 +131,12 @@ public class FabricWIIS extends WIIS implements ModInitializer {
                                             .executes(context -> restore(context, 2,false))
                                     )
                             )
-            );
-        }));
+            )
+        ));
     }
 
     @Override
-    public dev.coa.wiis.Config getConfig() {
+    public Config getConfig() {
         return CONFIG;
     }
 
@@ -202,52 +151,143 @@ public class FabricWIIS extends WIIS implements ModInitializer {
         return 0;
     }
 
-    private static int query(CommandContext<ServerCommandSource> context, int type, int mode) throws CommandSyntaxException {
-        String entryId = type == 0? StringArgumentType.getString(context, "entry") : type == 1? IdentifierArgumentType.getIdentifier(context, "type").toString() : EntityType.getId(EntityArgumentType.getEntity(context, "mob").getType()).toString();
-        Config.Entry entry = CONFIG.entities.get(entryId);
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static <T extends ArgumentBuilder> T appendModifySettings(T arg, Function<CommandContext<ServerCommandSource>, String> entryNameGetter, int level) {
+        return (T) arg.then(literal("discardreason")
+                    .then(argument("reason", StringArgumentType.word())
+                        .suggests((context, builder) -> CommandSource.suggestMatching(Arrays.stream(SpawnReason.values()).map(reason -> Config.toKebabCase(reason.toString())), builder))
+                        .then(argument("add", BoolArgumentType.bool()).executes(context -> modify(context, entryNameGetter.apply(context), 0, level)))
+                    )
+                )
+                .then(literal("chance")
+                    .then(argument("chance", FloatArgumentType.floatArg(0))
+                        .executes(context -> modify(context, entryNameGetter.apply(context), 2, level))
+                    )
+                )
+                .then(literal("discard")
+                    .then(argument("enable", BoolArgumentType.bool())
+                        .executes(context -> modify(context, entryNameGetter.apply(context), 1, level))
+                    )
+                );
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static <T extends ArgumentBuilder> T createModifySettings(T arg, Function<CommandContext<ServerCommandSource>, String> entryNameGetter) {
+        return (T) appendModifySettings(arg, entryNameGetter, 0)
+                .then(literal("worlds")
+                    .then(
+                        appendModifySettings(argument("world", StringArgumentType.string()), entryNameGetter, 1)
+                        .then(literal("biomes")
+                            .then(
+                                appendModifySettings(argument("biome", StringArgumentType.string()), entryNameGetter, 2)
+                            )
+                        )
+                    )
+                );
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static <T extends ArgumentBuilder> T appendQuerySettings(T arg, Function<CommandContext<ServerCommandSource>, String> entryNameGetter, int level) {
+        return (T) arg.executes(context -> query(context, entryNameGetter.apply(context), 0, level))
+                .then(literal("discardreason")
+                        .executes(context -> query(context, entryNameGetter.apply(context), 2, level))
+                        .then(argument("reason", StringArgumentType.word())
+                                .suggests((context, builder) -> CommandSource.suggestMatching(Arrays.stream(SpawnReason.values()).map(reason -> Config.toKebabCase(reason.toString())), builder))
+                                .executes(context -> query(context, entryNameGetter.apply(context), 1, level))
+                        )
+                )
+                .then(literal("chance")
+                        .executes(context -> query(context, entryNameGetter.apply(context), 4, level))
+                )
+                .then(literal("discard")
+                        .executes(context -> query(context, entryNameGetter.apply(context), 3, level))
+                );
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static <T extends ArgumentBuilder> T createQuerySettings(T arg, Function<CommandContext<ServerCommandSource>, String> entryNameGetter) {
+        return (T) appendQuerySettings(arg, entryNameGetter, 0)
+                .then(literal("worlds")
+                        .then(
+                                appendQuerySettings(argument("world", StringArgumentType.string()), entryNameGetter, 1)
+                                        .then(literal("biomes")
+                                                .then(
+                                                        appendModifySettings(argument("biome", StringArgumentType.string()), entryNameGetter, 2)
+                                                )
+                                        )
+                        )
+                );
+    }
+
+    public static int query(CommandContext<ServerCommandSource> context, String entryName, int modeId, int level) {
+        Config.Entry entry = CONFIG.entities.get(entryName);
+        String world, biome, valuePath = entryName;
+        Config.ElementSettings elementSettings = entry;
+
         if (entry == null) {
-            context.getSource().sendMessage(ENTRY_NOT_FOUND_TEXT.apply(entryId));
+            context.getSource().sendMessage(ENTRY_NOT_FOUND_TEXT.apply(entryName));
             return 0;
         }
 
-        if (mode == -1) context.getSource().sendMessage(QUERY_TEXT.apply(entryId, entry));
-        else if (mode == -2) {
-            String reason = StringArgumentType.getString(context, "reasonKey");
-            boolean excluded = entry.excludedReasons().contains(reason);
-            context.getSource().sendMessage(QUERY_REASON_TEXT.apply(new Object[]{entryId, reason, excluded}));
-        } else if (mode == 0) context.getSource().sendMessage(QUERY_REASONS_TEXT.apply(entryId, Config.fancyArray(entry.excludedReasons())));
-        else if (mode == 1) {
-            // TODO
-        } else if (mode == 2) {
-            boolean despawnInstantly = entry.despawnInstantly();
-            context.getSource().sendMessage(QUERY_DESPAWN_INSTANTLY_TEXT.apply(entryId, despawnInstantly));
-        } else if (mode == 3) {
-            // TODO
+        if (level >= 1) {
+            world = StringArgumentType.getString(context, "world");
+            valuePath += "." + world;
+            elementSettings = entry.worlds.get(world);
         }
+        if (level == 2) {
+            biome = StringArgumentType.getString(context, "biome");
+            valuePath += "." + biome;
+            elementSettings = ((Config.World) elementSettings).biomes.get(biome);
+        }
+
+        if (modeId == 0) context.getSource().sendMessage(QUERY_ENTRY_TEXT.apply(entryName, entry));
+        else if (modeId == 1) {
+            String reason = StringArgumentType.getString(context, "reason");
+            boolean discard = elementSettings.isDiscarded(reason);
+            context.getSource().sendMessage(QUERY_DISCARDREASON_TEXT.apply(new Object[]{valuePath, reason, discard}));
+            return discard? 1 : 0;
+        } else if (modeId == 2) context.getSource().sendMessage(QUERY_DISCARDREASONS_TEXT.apply(valuePath, Config.fancyArray(elementSettings.discardReasons())));
+        else if (modeId == 3) {
+            boolean discard = elementSettings.isDiscarded();
+            context.getSource().sendMessage(QUERY_DISCARD_TEXT.apply(valuePath, discard));
+            return discard? 1 : 0;
+        }
+        else if (modeId == 4) context.getSource().sendMessage(QUERY_CHANCE_TEXT.apply(valuePath, elementSettings.chance()));
 
         return 1;
     }
 
-    private static int modify(CommandContext<ServerCommandSource> context, int type, int mode) throws CommandSyntaxException {
-        String entryId = type == 0? StringArgumentType.getString(context, "entry") : type == 1? IdentifierArgumentType.getIdentifier(context, "type").toString() : EntityType.getId(EntityArgumentType.getEntity(context, "mob").getType()).toString();
-        Config.Entry entry = CONFIG.entities.computeIfAbsent(entryId, key -> new Config.Entry(false));
+    public static int modify(CommandContext<ServerCommandSource> context, String entryName, int modeId, int level) {
+        Config.Entry entry = CONFIG.entities.computeIfAbsent(entryName, key -> new Config.Entry());
+        String world, biome, valuePath = entryName;
+        Config.ElementSettings elementSettings = entry;
 
-        if (mode == 0) {
-            String reason = StringArgumentType.getString(context, "reasonKey");
-            boolean exclude = BoolArgumentType.getBool(context, "exclude");
-            entry.excludeReason(reason, exclude);
-            context.getSource().sendMessage(MODIFY_REASON_TEXT.apply(new Object[]{reason, entryId, exclude}));
-        } else if (mode == 1) {
-            // TODO
-        } else if (mode == 2) {
-            boolean despawnInstantly = BoolArgumentType.getBool(context, "enable");
-            entry.despawnInstantly(despawnInstantly);
-            context.getSource().sendMessage(MODIFY_DESPAWN_INSTANTLY_TEXT.apply(entryId, despawnInstantly));
-        } else if (mode == 3) {
-            // TODO
+        if (level >= 1) {
+            world = StringArgumentType.getString(context, "world");
+            valuePath += "." + world;
+            elementSettings = entry.worlds.get(world);
         }
+        if (level == 2) {
+            biome = StringArgumentType.getString(context, "biome");
+            valuePath += "." + biome;
+            elementSettings = ((Config.World) elementSettings).biomes.get(biome);
+        }
+
+        if (modeId == 0) {
+            String reason = StringArgumentType.getString(context, "reason");
+            boolean add = BoolArgumentType.getBool(context, "add");
+            elementSettings.discardReason(reason, add);
+            context.getSource().sendMessage(MODIFY_DISCARDREASON_TEXT.apply(new Object[]{valuePath, reason, add}));
+        } else if (modeId == 1) {
+            elementSettings.discard = BoolArgumentType.getBool(context, "enable");
+            context.getSource().sendMessage(MODIFY_DISCARD_TEXT.apply(valuePath, elementSettings.isDiscarded()));
+        } else if (modeId == 2) {
+            elementSettings.chance = FloatArgumentType.getFloat(context, "chance");
+            context.getSource().sendMessage(MODIFY_CHANCE_TEXT.apply(valuePath, elementSettings.chance()));
+        }
+
         if (CONFIG.autosave) CONFIG.save(getConfigPath(context.getSource().getServer()));
-        return 1;
+        return 0;
     }
 
     private static int restore(CommandContext<ServerCommandSource> context, int type, boolean all) {
@@ -258,7 +298,7 @@ public class FabricWIIS extends WIIS implements ModInitializer {
             if (CONFIG.autosave) CONFIG.save(getConfigPath(context.getSource().getServer()));
             return count;
         } else {
-            String path = "";
+            String path;
             try {
                 path = type == 0? StringArgumentType.getString(context, "entry") : type == 1? IdentifierArgumentType.getIdentifier(context, "type").toString() : EntityType.getId(EntityArgumentType.getEntity(context, "mob").getType()).toString();
             } catch (CommandSyntaxException e) {
@@ -333,16 +373,16 @@ public class FabricWIIS extends WIIS implements ModInitializer {
             editEntity(EntityType.getId(entityType), consumer);
         }
 
-        public boolean allowSpawn(Identifier id, SpawnReason reason, World world) {
-            return allowSpawn(id.toString(), reason, world.getDimensionKey().getValue().toString());
+        public boolean allowSpawn(Identifier id, SpawnReason reason, net.minecraft.world.World world, RegistryKey<Biome> biome) {
+            return allowSpawn(id.toString(), reason, world.getDimensionKey().getValue(), biome.getValue());
         }
 
-        public boolean allowSpawn(Entity entity, SpawnReason reason, World world) {
-            return allowSpawn(entity.getType(), reason, world);
+        public boolean allowSpawn(Entity entity, SpawnReason reason, net.minecraft.world.World world, RegistryKey<Biome> biome) {
+            return allowSpawn(entity.getType(), reason, world, biome);
         }
 
-        public boolean allowSpawn(EntityType<?> entityType, SpawnReason reason, World world) {
-            return allowSpawn(EntityType.getId(entityType), reason, world);
+        public boolean allowSpawn(EntityType<?> entityType, SpawnReason reason, net.minecraft.world.World world, RegistryKey<Biome> biome) {
+            return allowSpawn(EntityType.getId(entityType), reason, world, biome);
         }
 
         public static MutableText fancyKey(String key) {
@@ -376,40 +416,17 @@ public class FabricWIIS extends WIIS implements ModInitializer {
             Iterator iterator = collection.iterator();
             iterator.forEachRemaining(entry -> {
                 text.append(fancyValue(entry));
-                if (iterator.hasNext()) text.append(Text.literal(", ").formatted(Formatting.GOLD));
+                if (!iterator.hasNext()) text.append(Text.literal(", ").formatted(Formatting.GOLD));
             });
             return text.append("]");
         }
     }
 
-    public static MutableText UNAVAILABLE_TEXT = Text.translatable("wiis.unavailable").formatted(Formatting.RED);
-    public static MutableText RELOAD_TEXT = Text.translatable("wiis.reload");
-    public static BiFunction<Integer, String, MutableText> RESTORE_TEXT = (count, entry) -> {
-        if (count != null && entry != null) return Text.translatable("wiis.restore.with_regex", count, entry);
-        else if (count == null) return Text.translatable("wiis.restore.single", entry);
-        else if (entry == null) {
-            if (count == 0) return Text.translatable("wiis.restore.empty");
-            return Text.translatable("wiis.restore.all", count);
-        }
-        else return Text.empty();
-    };
-    public static BiFunction<Boolean, Boolean, MutableText> ENABLED_TEXT = (set, enable) -> set? Text.translatable("wiis.enabled.set", enable) : Text.translatable("wiis.enabled.get", enable);
-    public static BiFunction<Boolean, Integer, MutableText> PERMISSION_LEVEL_TEXT = (set, level) -> set? Text.translatable("wiis.permissionLevel.set", level) : Text.translatable("wiis.permissionLevel.get", level);
-    public static BiFunction<Boolean, Boolean, MutableText> AUTOSAVE_TEXT = (set, enable) -> set? Text.translatable("wiis.autosave.set", enable) : Text.translatable("wiis.autosave.get", enable);
+    public static final BiFunction<Boolean, Boolean, MutableText> ENABLED_TEXT = (set, enable) -> Text.translatable("wiis.enabled." + (set? "set" : "get"), enable);
+    public static final BiFunction<Boolean, Integer, MutableText> PERMISSION_LEVEL_TEXT = (set, level) -> Text.translatable("wiis.permissionLevel." + (set? "set" : "get"), level);
+    public static final BiFunction<Boolean, Boolean, MutableText> AUTOSAVE_TEXT = (set, enable) -> Text.translatable("wiis.autosave." + (set? "set" : "get"), enable);
 
-    public static BiFunction<String, Config.Entry, MutableText> QUERY_TEXT = (key, entry) -> {
-        Map<String, Object> map = new HashMap<>();
-        map.put("excludedReasons", entry.excludedReasons());
-        map.put("despawnInstantly", entry.despawnInstantly());
-        return Text.empty().append(Text.translatable("wiis.query", key)).append(Config.fancyObject(map));
-    };
-    public static Function<Object[], MutableText> MODIFY_REASON_TEXT = args -> Text.translatable("wiis.modify.reason", args[0], args[1], args[2]);
-    public static Function<Object[], MutableText> QUERY_REASON_TEXT = args -> Text.translatable("wiis.query.reason", args[0], args[1], args[2]);
-    public static BiFunction<String, Text, MutableText> QUERY_REASONS_TEXT = (entry, text) -> Text.empty().append(Text.translatable("wiis.query.reasons", entry)).append(text);
-    public static BiFunction<String, Boolean, MutableText> MODIFY_DESPAWN_INSTANTLY_TEXT = (entry, value) -> Text.translatable("wiis.modify.despawnInstantly", entry, value);
-    public static BiFunction<String, Boolean, MutableText> QUERY_DESPAWN_INSTANTLY_TEXT = (entry, value) -> Text.translatable("wiis.query.despawnInstantly", entry, value);
-
-    public static Supplier<MutableText> INFO_TEXT = () -> Text.literal( ID.toUpperCase() + " (" + NAME + ")" + Formatting.GREEN + " v" + VERSION + (CONFIG.debug? Formatting.GOLD + " (debug) " : " ") + Formatting.RESET).append(Text.translatable("wiis.info")).append("\n")
+    public static final Supplier<MutableText> INFO_TEXT = () -> Text.literal( ID.toUpperCase() + " (" + NAME + ")" + Formatting.GREEN + " v" + VERSION + (CONFIG.debug? Formatting.GOLD + " (debug) " : " ") + Formatting.RESET).append(Text.translatable("wiis.info")).append("\n")
             .append(Text.literal("Modrinth")
                     .styled(e -> e.withColor(0x23D86F).withUnderline(true)
                             .withClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, "https://modrinth.com/mod/wiis"))
@@ -420,5 +437,34 @@ public class FabricWIIS extends WIIS implements ModInitializer {
                     )
             );
 
-    public static Function<String, MutableText> ENTRY_NOT_FOUND_TEXT = key -> Text.translatable("wiis.entry_not_found", key).formatted(Formatting.RED);
+    public static final MutableText RELOAD_TEXT = Text.translatable("wiis.reload");
+    public static final BiFunction<Integer, String, MutableText> RESTORE_TEXT = (count, elementPath) -> {
+        if (count != null && elementPath != null) return Text.translatable("wiis.restore.with_regex", count, elementPath);
+        else if (count == null) return Text.translatable("wiis.restore.single", elementPath);
+        else if (elementPath == null) {
+            if (count == 0) return Text.translatable("wiis.restore.empty");
+            return Text.translatable("wiis.restore.all", count);
+        }
+        else return Text.empty();
+    };
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    public static final BiFunction<String, Config.Entry, MutableText> QUERY_ENTRY_TEXT = (entryName, entry) -> {
+        Map map = Config.GSON.fromJson(Config.GSON.toJson(entry), Map.class);
+        return Text.empty().append(Text.translatable("wiis.query", entryName)).append(Config.fancyObject(map));
+    };
+
+    public static final BiFunction<String, Text, MutableText> QUERY_DISCARDREASONS_TEXT = (entry, text) -> Text.empty().append(Text.translatable("wiis.query.discardreasons", entry)).append(text);
+
+    public static final Function<Object[], MutableText> MODIFY_DISCARDREASON_TEXT = (args) -> Text.translatable("wiis.modify.discardreason." + (args[2].equals(true)? "add" : "remove"), args[0], args[1]);
+    public static final Function<Object[], MutableText> QUERY_DISCARDREASON_TEXT = (args) -> Text.translatable("wiis.query.discardreason.contains." + (args[2].equals(true)? "success" : "fail"), args[0], args[1]);
+
+    public static final BiFunction<String, Float, MutableText> MODIFY_CHANCE_TEXT = (valuePath, value) -> Text.translatable("wiis.modify.chance", valuePath, value);
+    public static final BiFunction<String, Float, MutableText> QUERY_CHANCE_TEXT = (valuePath, value) -> Text.translatable("wiis.query.chance", valuePath, value);
+
+    public static final BiFunction<String, Boolean, MutableText> MODIFY_DISCARD_TEXT = (valuePath, value) -> Text.translatable("wiis.modify.discard", valuePath, value);
+    public static final BiFunction<String, Boolean, MutableText> QUERY_DISCARD_TEXT = (valuePath, value) -> Text.translatable("wiis.query.discard", valuePath, value);
+
+    public static final Function<String, MutableText> ENTRY_NOT_FOUND_TEXT = key -> Text.translatable("wiis.entry_not_found", key).formatted(Formatting.RED);
+    public static final MutableText UNAVAILABLE_TEXT = Text.translatable("wiis.unavailable").formatted(Formatting.RED);
 }
