@@ -8,6 +8,7 @@ import com.mojang.brigadier.builder.ArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 
+import dev.coa.wiis.Config;
 import dev.coa.wiis.WIIS;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
@@ -151,7 +152,7 @@ public class FabricWIIS extends WIIS implements ModInitializer {
         return 0;
     }
 
-    @SuppressWarnings({"unchecked", "rawtypes"})
+    @SuppressWarnings({"unchecked"})
     private static <T extends ArgumentBuilder> T appendModifySettings(T arg, Function<CommandContext<ServerCommandSource>, String> entryNameGetter, int level) {
         return (T) arg.then(literal("discardreason")
                     .then(argument("reason", StringArgumentType.word())
@@ -220,9 +221,9 @@ public class FabricWIIS extends WIIS implements ModInitializer {
     }
 
     public static int query(CommandContext<ServerCommandSource> context, String entryName, int modeId, int level) {
-        Config.Entry entry = CONFIG.entities.get(entryName);
+        dev.coa.wiis.Config.Entry entry = CONFIG.entities.get(entryName);
         String world, biome, valuePath = entryName;
-        Config.ElementSettings elementSettings = entry;
+        dev.coa.wiis.Config.ISetting elementSettings = entry;
 
         if (entry == null) {
             context.getSource().sendMessage(ENTRY_NOT_FOUND_TEXT.apply(entryName));
@@ -232,18 +233,18 @@ public class FabricWIIS extends WIIS implements ModInitializer {
         if (level >= 1) {
             world = StringArgumentType.getString(context, "world");
             valuePath += "." + world;
-            elementSettings = entry.worlds.get(world);
+            elementSettings = (dev.coa.wiis.Config.ISetting) ((dev.coa.wiis.Config.Entry) elementSettings).worlds().get(world);
         }
         if (level == 2) {
             biome = StringArgumentType.getString(context, "biome");
             valuePath += "." + biome;
-            elementSettings = ((Config.World) elementSettings).biomes.get(biome);
+            elementSettings = (dev.coa.wiis.Config.ISetting) ((dev.coa.wiis.Config.World) elementSettings).biomes().get(biome);
         }
 
         if (modeId == 0) context.getSource().sendMessage(QUERY_ENTRY_TEXT.apply(entryName, entry));
         else if (modeId == 1) {
             String reason = StringArgumentType.getString(context, "reason");
-            boolean discard = elementSettings.isDiscarded(reason);
+            boolean discard = elementSettings.isDiscardedBy(reason);
             context.getSource().sendMessage(QUERY_DISCARDREASON_TEXT.apply(new Object[]{valuePath, reason, discard}));
             return discard? 1 : 0;
         } else if (modeId == 2) context.getSource().sendMessage(QUERY_DISCARDREASONS_TEXT.apply(valuePath, Config.fancyArray(elementSettings.discardReasons())));
@@ -258,19 +259,19 @@ public class FabricWIIS extends WIIS implements ModInitializer {
     }
 
     public static int modify(CommandContext<ServerCommandSource> context, String entryName, int modeId, int level) {
-        Config.Entry entry = CONFIG.entities.computeIfAbsent(entryName, key -> new Config.Entry());
+        dev.coa.wiis.Config.Entry entry = CONFIG.entities.computeIfAbsent(entryName, key -> new Config.Entry());
         String world, biome, valuePath = entryName;
-        Config.ElementSettings elementSettings = entry;
+        dev.coa.wiis.Config.BasicSettings elementSettings = (dev.coa.wiis.Config.BasicSettings) entry;
 
         if (level >= 1) {
             world = StringArgumentType.getString(context, "world");
             valuePath += "." + world;
-            elementSettings = entry.worlds.get(world);
+            elementSettings = (dev.coa.wiis.Config.BasicSettings) ((dev.coa.wiis.Config.Entry) elementSettings).worlds().get(world);
         }
         if (level == 2) {
             biome = StringArgumentType.getString(context, "biome");
             valuePath += "." + biome;
-            elementSettings = ((Config.World) elementSettings).biomes.get(biome);
+            elementSettings = (dev.coa.wiis.Config.BasicSettings) ((dev.coa.wiis.Config.World) elementSettings).biomes().get(biome);
         }
 
         if (modeId == 0) {
@@ -373,16 +374,16 @@ public class FabricWIIS extends WIIS implements ModInitializer {
             editEntity(EntityType.getId(entityType), consumer);
         }
 
-        public boolean allowSpawn(Identifier id, SpawnReason reason, net.minecraft.world.World world, RegistryKey<Biome> biome) {
-            return allowSpawn(id.toString(), reason, world.getDimensionKey().getValue(), biome.getValue());
+        public boolean canSpawn(Identifier id, SpawnReason reason, net.minecraft.world.World world, RegistryKey<Biome> biome) {
+            return canSpawn(id.toString(), reason, world.getDimensionKey().getValue(), biome.getValue());
         }
 
-        public boolean allowSpawn(Entity entity, SpawnReason reason, net.minecraft.world.World world, RegistryKey<Biome> biome) {
-            return allowSpawn(entity.getType(), reason, world, biome);
+        public boolean canSpawn(Entity entity, SpawnReason reason, net.minecraft.world.World world, RegistryKey<Biome> biome) {
+            return canSpawn(entity.getType(), reason, world, biome);
         }
 
-        public boolean allowSpawn(EntityType<?> entityType, SpawnReason reason, net.minecraft.world.World world, RegistryKey<Biome> biome) {
-            return allowSpawn(EntityType.getId(entityType), reason, world, biome);
+        public boolean canSpawn(EntityType<?> entityType, SpawnReason reason, net.minecraft.world.World world, RegistryKey<Biome> biome) {
+            return canSpawn(EntityType.getId(entityType), reason, world, biome);
         }
 
         public static MutableText fancyKey(String key) {

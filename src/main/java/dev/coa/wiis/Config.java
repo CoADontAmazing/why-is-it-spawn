@@ -1,8 +1,5 @@
 package dev.coa.wiis;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.nio.file.Files;
@@ -10,26 +7,32 @@ import java.nio.file.Path;
 import java.util.*;
 import java.util.function.Consumer;
 
-import static dev.coa.wiis.WIIS.*;
+import com.google.gson.*;
+import org.jetbrains.annotations.NotNull;
 
-public class Config {
+import static dev.coa.wiis.WIIS.ID;
+import static dev.coa.wiis.WIIS.LOGGER;
+
+@SuppressWarnings("rawtypes")
+public class Config<E extends Config.Entry> {
     public static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+
     public static final String REGEX_TAG = "?";
+    public static final String REGEX_ANY = "?.*";
 
     public boolean enabled;
     public boolean autosave = true;
     public boolean debug = false;
     public int permissionLevel = 4;
 
-    public final Map<String, Entry> entities = new HashMap<>();
-
-    public static boolean validate(String raw, String validator) {
-        if (raw.startsWith(REGEX_TAG)) return validator.matches(raw.substring(1));
-        return validator.equals(raw);
-    }
+    public final Map<String, E> entities = new HashMap<>();
 
     public static String toKebabCase(String string) {
         return string.toLowerCase().replace(" ", "-").replace("_", "-");
+    }
+
+    public static boolean validate(String raw, String validator) {
+        return raw.startsWith(REGEX_TAG)? validator.matches(raw.substring(1)) : validator.equals(raw);
     }
 
     public static <C extends Config> C load(Path path, Class<C> type) {
@@ -43,153 +46,183 @@ public class Config {
         return type.cast(new Config());
     }
 
-    public List<Map.Entry<String, Entry>> findEntries(String validator) {
-        List<Map.Entry<String, Entry>> entryList = new ArrayList<>();
-        for (Map.Entry<String, Entry> entry : entities.entrySet()) {
-            if (validate(entry.getKey(), validator)) entryList.add(entry);
-        }
+    public List<Map.Entry<String, E>> findEntries(String validator) {
+        List<Map.Entry<String, E>> entries = new ArrayList<>();
 
-        return entryList;
+        entities.entrySet().forEach(entity -> {
+            if (validate(entity.getKey(), validator)) entries.add(entity);
+        });
+
+        return entries;
     }
 
-    public boolean hasEntry(String id) {
-        for (Map.Entry<String, Entry> entry : entities.entrySet()) {
-            if (validate(entry.getKey(), id)) return true;
-        }
+    public void editEntry(String entry, Consumer<E> consumer) {
+        entities.forEach((key, value) -> {
+            if (validate(key, entry)) consumer.accept(value);
+        });
+    }
+
+    public boolean hasEntry(String entry) {
+        for (Map.Entry<String, E> entity : entities.entrySet()) if (validate(entity.getKey(), entry)) return true;
         return false;
     }
 
-    public void editEntry(String id, Consumer<Entry> consumer) {
-        for (Map.Entry<String, Entry> entry : entities.entrySet()) {
-            if (validate(entry.getKey(), id))
-                consumer.accept(entry.getValue());
-        }
-    }
-
-    public boolean allowSpawn(String id, Object reason, Object world, Object biome) {
-        for (Map.Entry<String, Entry> entry : entities.entrySet()) {
-            if (validate(entry.getKey(), id))
-                return entry.getValue().allowSpawn(reason, world, biome);
-        }
+    public boolean canSpawn(String id, Object reason, Object world, Object biome) {
+        for (Map.Entry<String, E> entry : entities.entrySet()) if (validate(entry.getKey(), id)) return entry.getValue().canSpawn(reason, world, biome);
         return true;
     }
 
+    public JsonObject toJson() {
+        return null;
+    }
+
     public void save(Path path) {
-        if (path == null) return;
-        try {
+        if (path != null) try {
             if (!Files.exists(path.getParent())) Files.createDirectories(path.getParent());
             final BufferedWriter writer = Files.newBufferedWriter(path);
-            GSON.toJson(this, writer);
+            GSON.toJson(toJson(), writer);
             writer.close();
         } catch (Exception ex) {
             LOGGER.warn("[" + ID.toUpperCase() + "]: ", ex);
         }
     }
 
-    public static class World extends ElementSettings {
-        public Map<String, Biome> biomes;
+    public static interface Biome extends ISetting {}
 
-        public World() {
-            this(new HashMap<>());
-        }
-
-        public World(Map<String, Biome> biomes) {
-            this.biomes = new HashMap<>(biomes);
-        }
-
-        public Biome newBiome(String name) {
-            Biome biome = new Biome();
-            if (biomes == null) this.biomes = new HashMap<>();
-            biomes.put(name, biome);
+    public static interface World<B extends Biome> extends ISetting {
+        default B addBiome(String name, B biome) {
+            biomes().putIfAbsent(name, biome);
             return biome;
         }
 
-        public void removeBiome(String name) {
-            if (biomes != null) biomes.remove(name);
+        default void removeBiome(String name) {
+            biomes().remove(name);
         }
 
-        public boolean allowSpawn(Object reason, Object biome) {
-            if (biome != null) biome = biome.toString();
-            if (biomes != null && (biome == null? "" : biome.toString()).startsWith(REGEX_TAG))
-                for (Map.Entry<String, Biome> entry : biomes.entrySet())
-                    if (validate(entry.getKey(), biome.toString())) return allowSpawn(reason) && (biomes.containsKey(biome) ? biomes.get(biome).allowSpawn(reason) : true);
-            return allowSpawn(reason) && (biomes != null && biomes.containsKey(biome) ? biomes.get(biome).allowSpawn(reason) : true);
+        default Optional<B> getBiome(String name) {
+            return Optional.ofNullable(biomes().get(name));
         }
 
-        public static class Biome extends ElementSettings {}
+        default Optional<B> anyBiome() {
+            return getBiome(REGEX_ANY);
+        }
+
+        @NotNull Map<String, B> biomes();
+
+        default void writeJson(JsonObject json) {
+            ISetting.super.writeJson(json);
+
+        }
+
+        default boolean canSpawn(Object reason, Object biome) {
+            var rawBiome = biome == null? REGEX_ANY : biome instanceof String s? s : biome.toString();
+            var canSpawn = canSpawn(reason);
+
+            if (rawBiome.startsWith(REGEX_TAG))
+                for (Map.Entry<String, B> entry : biomes().entrySet())
+                    if (validate(entry.getKey(), rawBiome)) return canSpawn && entry.getValue().canSpawn(reason);
+            return canSpawn && (!biomes().containsKey(rawBiome) || biomes().get(rawBiome).canSpawn(reason));
+        }
     }
 
-    public static class Entry extends ElementSettings {
-        public Map<String, World> worlds;
-
-        public Entry() {
-            this(new HashMap<>());
-        }
-
-        public Entry(Map<String, World> worlds) {
-            this.worlds = worlds;
-        }
-
-        public World newWorld(String name) {
-            World world = new World();
-            if (worlds == null) this.worlds = new HashMap<>();
-            worlds.put(name, world);
+    @SuppressWarnings("rawtypes")
+    public static interface Entry<W extends World> extends ISetting {
+        default W addWorld(String name, W world) {
+            worlds().putIfAbsent(name, world);
             return world;
         }
 
-        public World.Biome newBiome(String worldName, String biomeName) {
-            World world = worlds.containsKey(worldName)? worlds.get(worldName) : newWorld(worldName);
-            return world.newBiome(biomeName);
+        default void removeWorld(String name) {
+            worlds().remove(name);
         }
 
-        public void removeWorld(String name) {
-            if (worlds != null) worlds.remove(name);
+        default Optional<W> getWorld(String name) {
+            return Optional.ofNullable(worlds().get(name));
         }
 
-        public boolean allowSpawn(Object reason, Object world, Object biome) {
-            if (world != null) world = world.toString();
-            if (worlds != null && (world == null? "" : world.toString()).startsWith(REGEX_TAG))
-                for (Map.Entry<String, World> entry : worlds.entrySet())
-                    if (validate(entry.getKey(), world.toString())) return allowSpawn(reason) && (worlds.containsKey(world)? worlds.get(world).allowSpawn(reason, biome) : true);
-            return allowSpawn(reason) && (worlds.containsKey(world)? worlds.get(world).allowSpawn(reason, biome) : true);
+        default Optional<W> anyWorld() {
+            return getWorld(REGEX_ANY);
+        }
+
+        @NotNull Map<String, W> worlds();
+
+        default void writeJson(JsonObject json) {
+            ISetting.super.writeJson(json);
+
+        }
+
+        default boolean canSpawn(Object reason, Object world, Object biome) {
+            var rawWorld = world == null? REGEX_ANY : world instanceof String s? s : world.toString();
+            var canSpawn = canSpawn(reason);
+
+            if (rawWorld.startsWith(REGEX_TAG))
+                for (Map.Entry<String, W> entry : worlds().entrySet())
+                    if (validate(entry.getKey(), rawWorld)) return canSpawn && entry.getValue().canSpawn(reason, biome);
+            return canSpawn && (!worlds().containsKey(rawWorld) || worlds().get(rawWorld).canSpawn(reason, biome));
         }
     }
 
-    public static abstract class ElementSettings {
-        private List<String> discardReasons;
+    public static interface ISetting {
+        default void discardReason(Object reason, boolean add) {
+            if (reason == null) return;
+            var rawReason = toKebabCase(reason instanceof String s? s : reason.toString());
+            if (add) discardReasons().add(rawReason);
+            else discardReasons().remove(rawReason);
+        }
+
+        default boolean isDiscardedBy(Object reason) {
+            if (reason == null) return false;
+            return discardReasons().contains(toKebabCase(reason instanceof String s? s : reason.toString()));
+        }
+
+        @NotNull List<String> discardReasons();
+
+        float chance();
+
+        boolean isDiscarded();
+
+        boolean canSpawn(Object reason);
+
+        default void writeJson(JsonObject json) {
+            if (this instanceof BasicSettings basicSettings) basicSettings.writeJson(json);
+        }
+
+        default JsonObject toJson() {
+            JsonObject json = new JsonObject();
+            writeJson(json);
+            return json;
+        }
+    }
+
+    public static abstract class BasicSettings implements ISetting {
+        private final List<String> discardReasons = new ArrayList<>();
         public Float chance;
         public Boolean discard;
 
-        public void discardReason(Object reason, boolean add) {
-            if (reason == null) return;
-            if (discardReasons == null) discardReasons = new ArrayList<>();
-            reason = toKebabCase(reason.toString());
-            if (add) discardReasons.add(reason.toString());
-            else discardReasons.remove(reason.toString());
+        @Override
+        public @NotNull List<String> discardReasons() {
+            return discardReasons;
         }
 
-        public boolean isDiscarded(Object reason) {
-            if (reason == null) return false;
-            if (discardReasons == null) return false;
-            reason = toKebabCase(reason.toString());
-            return discardReasons.contains(reason.toString());
-        }
-
-        public List<String> discardReasons() {
-            return List.copyOf(discardReasons);
-        }
-
-        public boolean isDiscarded() {
-            return discard != null && discard;
-        }
-
+        @Override
         public float chance() {
             return chance != null? chance : 1f;
         }
 
-        public boolean allowSpawn(Object reason) {
+        @Override
+        public boolean isDiscarded() {
+            return discard != null && discard;
+        }
+
+        @Override
+        public boolean canSpawn(Object reason) {
             if (isDiscarded()) return false;
-            return (chance == null? true : Math.random() <= chance) && !isDiscarded(reason);
+            return (chance == null || Math.random() <= chance) && !isDiscardedBy(reason);
+        }
+
+        @Override
+        public void writeJson(JsonObject json) {
+
         }
     }
 }

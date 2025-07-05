@@ -13,7 +13,7 @@ public abstract class WIIS {
 
     public abstract void registerCommands();
 
-    public abstract Config getConfig();
+    public abstract Config<?> getConfig();
 
     protected static void setInstance(WIIS instance) {
         if (WIIS.instance != null) throw new RuntimeException("Unfortunately, it is not possible to replace an already occupied state.");
@@ -24,7 +24,7 @@ public abstract class WIIS {
         return instance;
     }
 
-    public static <C extends Config> C getConfig(Class<C> type) {
+    public static <C extends Config<?>> C getConfig(Class<C> type) {
         return type.cast(getInstance().getConfig());
     }
 

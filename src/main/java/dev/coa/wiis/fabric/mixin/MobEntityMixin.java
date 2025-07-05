@@ -12,9 +12,9 @@ import org.spongepowered.asm.mixin.injection.callback.*;
 
 @Mixin(MobEntity.class)
 public abstract class MobEntityMixin {
-	@Inject(method = "initialize", at = @At("HEAD"), cancellable = true)
+	@Inject(method = "initialize", at = @At("HEAD"))
 	private void wiis$init(ServerWorldAccess swa, LocalDifficulty d, SpawnReason reason, EntityData ed, NbtCompound nbt, CallbackInfoReturnable<EntityData> cir) {
-		if (FabricWIIS.isEnabled() && !FabricWIIS.CONFIG.allowSpawn(asMob(), reason, asMob().getWorld(), asMob().getWorld().getBiome(asMob().getBlockPos()).getKey().get())) {
+		if (FabricWIIS.isEnabled() && !FabricWIIS.CONFIG.canSpawn(asMob(), reason, asMob().getWorld(), asMob().getWorld().getBiome(asMob().getBlockPos()).getKey().get())) {
 			FabricWIIS.debug("at: MobEntity.initialize(mob: " + this + ", spawnReason: " + reason + ") removed");
 			asMob().discard();
 		}
@@ -22,7 +22,7 @@ public abstract class MobEntityMixin {
 
 	@Inject(method = "checkDespawn", at = @At("HEAD"), cancellable = true)
 	private void wiis$tryDespawn(CallbackInfo i) {
-		if (FabricWIIS.isEnabled() && !FabricWIIS.CONFIG.allowSpawn(asMob(), null, asMob().getWorld(), asMob().getWorld().getBiome(asMob().getBlockPos()).getKey().get())) {
+		if (FabricWIIS.isEnabled() && !FabricWIIS.CONFIG.canSpawn(asMob(), null, asMob().getWorld(), asMob().getWorld().getBiome(asMob().getBlockPos()).getKey().get())) {
 			FabricWIIS.debug("at: MobEntity.checkDespawn(mob: " + this + ") removed");
 			asMob().discard();
 			i.cancel();

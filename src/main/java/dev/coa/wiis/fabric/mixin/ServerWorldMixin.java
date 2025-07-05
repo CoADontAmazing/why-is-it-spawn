@@ -12,7 +12,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class ServerWorldMixin {
 	@Inject(method = "addEntity", at = @At("HEAD"), cancellable = true)
 	private void wiis$addEntity(Entity entity, CallbackInfoReturnable<Boolean> ci) {
-		if (FabricWIIS.isEnabled() && !FabricWIIS.CONFIG.allowSpawn(entity, null, asServerWorld(), asServerWorld().getBiome(entity.getBlockPos()).getKey().get())) {
+		if (FabricWIIS.isEnabled() && !FabricWIIS.CONFIG.canSpawn(entity, null, asServerWorld(), asServerWorld().getBiome(entity.getBlockPos()).getKey().get())) {
 			if (!entity.isRemoved()) {
 				FabricWIIS.debug("at: ServerWorld.addEntity(entity: " + entity + ") removed");
 				entity.discard();
