@@ -162,11 +162,7 @@ public class FabricConfig extends dev.coa.wiis.Config<FabricConfig.FabricEntry> 
         }
     };
 
-    @SuppressWarnings({"rawtypes"})
-    public static final BiFunction<String, FabricEntry, MutableText> QUERY_ENTRY_TEXT = (entryName, entry) -> {
-        Map map = GSON.fromJson(GSON.toJson(entry), Map.class);
-        return Text.empty().append(Text.translatable("wiis.query", entryName)).append(fancyMap(map));
-    };
+    public static final BiFunction<String, FabricEntry, MutableText> QUERY_ENTRY_TEXT = (entryKey, entry) -> Text.empty().append(Text.translatable("wiis.query", entryKey)).append(fancyMap(GSON.fromJson(entry.toJson(), Map.class)));
 
     public static final BiFunction<String, Text, MutableText> QUERY_DISCARDREASONS_TEXT = (entry, text) -> Text.empty().append(Text.translatable("wiis.query.discardreason.all", entry)).append(text);
 
