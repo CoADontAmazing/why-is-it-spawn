@@ -1,20 +1,22 @@
 package dev.coa.wiis;
 
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
+import com.google.gson.*;
+import com.google.gson.reflect.TypeToken;
+
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+import static dev.coa.wiis.WIIS.ID;
+import static dev.coa.wiis.WIIS.LOGGER;
+
+import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.function.Consumer;
 
-import com.google.gson.*;
-import org.jetbrains.annotations.NotNull;
-
-import static dev.coa.wiis.WIIS.ID;
-import static dev.coa.wiis.WIIS.LOGGER;
-
 @SuppressWarnings("rawtypes")
-public class Config<E extends Config.Entry> {
+public abstract class Config<E extends Config.Entry> {
     public static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     public static final String REGEX_TAG = "?";
@@ -25,65 +27,106 @@ public class Config<E extends Config.Entry> {
     public boolean debug = false;
     public int permissionLevel = 4;
 
-    public final Map<String, E> entities = new HashMap<>();
+    public final Map<String, E> entries = new HashMap<>();
 
     public static String toKebabCase(String string) {
         return string.toLowerCase().replace(" ", "-").replace("_", "-");
     }
 
-    public static boolean validate(String raw, String validator) {
-        return raw.startsWith(REGEX_TAG)? validator.matches(raw.substring(1)) : validator.equals(raw);
+    public static boolean matches(String string, String regex) {
+        return string.startsWith(REGEX_TAG)? regex.matches(string.substring(1)) : regex.equals(string);
     }
 
     public static <C extends Config> C load(Path path, Class<C> type) {
-        if (Files.exists(path)) {
-            try (final BufferedReader reader = Files.newBufferedReader(path)) {
-                return GSON.fromJson(reader, type);
-            } catch (Exception ex) {
-                LOGGER.warn("[" + ID.toUpperCase() + "]: ", ex);
-            }
+        if (Files.exists(path)) try (final BufferedReader reader = Files.newBufferedReader(path)){
+            return load(reader, type);
+        } catch (Exception ex) {
+            LOGGER.warn("[{}]: ", ID.toUpperCase(), ex);
         }
-        return type.cast(new Config());
+        return null;
     }
 
-    public List<Map.Entry<String, E>> findEntries(String validator) {
+    @SuppressWarnings("unchecked")
+    public static <C extends Config> C load(Reader reader, Class<C> type) {
+        try {
+            JsonObject json = JsonParser.parseReader(reader).getAsJsonObject();
+            C c = GSON.fromJson(json, type);
+            if (json.has("entries")) json.getAsJsonObject("entries").asMap().forEach((k, v) -> c.entries.put(k, c.newEntry(v.getAsJsonObject())));
+            return c;
+        } catch (Exception ex) {
+            LOGGER.warn("[{}]: ", ID.toUpperCase(), ex);
+        }
+        return null;
+    }
+
+    public static <C extends Config> C load(String string, Class<C> type) {
+        return load(new StringReader(string), type);
+    }
+
+    public List<Map.Entry<String, E>> findEntries(String regex) {
         List<Map.Entry<String, E>> entries = new ArrayList<>();
 
-        entities.entrySet().forEach(entity -> {
-            if (validate(entity.getKey(), validator)) entries.add(entity);
+        this.entries.entrySet().forEach(entity -> {
+            if (matches(entity.getKey(), regex)) entries.add(entity);
         });
 
         return entries;
     }
 
-    public void editEntry(String entry, Consumer<E> consumer) {
-        entities.forEach((key, value) -> {
-            if (validate(key, entry)) consumer.accept(value);
+    public void editEntry(String regex, Consumer<E> consumer) {
+        entries.forEach((k, v) -> {
+            if (matches(k, regex)) consumer.accept(v);
         });
     }
 
-    public boolean hasEntry(String entry) {
-        for (Map.Entry<String, E> entity : entities.entrySet()) if (validate(entity.getKey(), entry)) return true;
+    public boolean hasEntry(String regex) {
+        for (Map.Entry<String, E> entity : entries.entrySet()) if (matches(entity.getKey(), regex)) return true;
         return false;
     }
 
-    public boolean canSpawn(String id, Object reason, Object world, Object biome) {
-        for (Map.Entry<String, E> entry : entities.entrySet()) if (validate(entry.getKey(), id)) return entry.getValue().canSpawn(reason, world, biome);
+    public E setEntry(String key, E entry) {
+        entries.put(key, entry);
+        return entry;
+    }
+
+    public E addEntry(String key, E entry) {
+        return entries.containsKey(key)? entries.get(key) : setEntry(key, entry);
+    }
+
+    public void removeEntries(String... keys) {
+        for (String key : keys) entries.remove(key);
+    }
+
+    public boolean canSpawn(String regex, @Nullable Object reason, @Nullable Object world, @Nullable Object biome) {
+        for (Map.Entry<String, E> entry : entries.entrySet()) if (matches(entry.getKey(), regex)) return entry.getValue().canSpawn(reason, world, biome);
         return true;
     }
 
+    public abstract E newEntry(JsonObject json);
+
     public JsonObject toJson() {
-        return null;
+        JsonObject json = new JsonObject();
+        json.addProperty("enabled", enabled);
+        json.addProperty("autosave", autosave);
+        json.addProperty("debug", debug);
+        json.addProperty("permissionLevel", permissionLevel);
+
+        JsonObject jsonEntities = new JsonObject();
+        if (!entries.isEmpty()) entries.forEach((k, v) -> jsonEntities.add(k, v.toJson()));
+
+        json.add("entries", jsonEntities);
+        return json;
     }
 
     public void save(Path path) {
         if (path != null) try {
             if (!Files.exists(path.getParent())) Files.createDirectories(path.getParent());
-            final BufferedWriter writer = Files.newBufferedWriter(path);
-            GSON.toJson(toJson(), writer);
-            writer.close();
+
+            try (final BufferedWriter writer = Files.newBufferedWriter(path)) {
+                GSON.toJson(toJson(), writer);
+            }
         } catch (Exception ex) {
-            LOGGER.warn("[" + ID.toUpperCase() + "]: ", ex);
+            LOGGER.warn("[{}]: ", ID.toUpperCase(), ex);
         }
     }
 
@@ -94,6 +137,8 @@ public class Config<E extends Config.Entry> {
             biomes().putIfAbsent(name, biome);
             return biome;
         }
+
+        B newBiome(JsonObject json);
 
         default void removeBiome(String name) {
             biomes().remove(name);
@@ -109,9 +154,14 @@ public class Config<E extends Config.Entry> {
 
         @NotNull Map<String, B> biomes();
 
-        default void writeJson(JsonObject json) {
-            ISetting.super.writeJson(json);
+        default void readJson(JsonObject json) {
+            if (json.has("biomes")) json.getAsJsonObject("biomes").asMap().forEach((k, v) -> biomes().put(k, newBiome(v.getAsJsonObject())));
+            ISetting.super.readJson(json);
+        }
 
+        default void writeJson(JsonObject json) {
+            if (!biomes().isEmpty()) biomes().forEach((k, v) -> json.add(k, v.toJson()));
+            ISetting.super.writeJson(json);
         }
 
         default boolean canSpawn(Object reason, Object biome) {
@@ -120,7 +170,7 @@ public class Config<E extends Config.Entry> {
 
             if (rawBiome.startsWith(REGEX_TAG))
                 for (Map.Entry<String, B> entry : biomes().entrySet())
-                    if (validate(entry.getKey(), rawBiome)) return canSpawn && entry.getValue().canSpawn(reason);
+                    if (matches(entry.getKey(), rawBiome)) return canSpawn && entry.getValue().canSpawn(reason);
             return canSpawn && (!biomes().containsKey(rawBiome) || biomes().get(rawBiome).canSpawn(reason));
         }
     }
@@ -131,6 +181,8 @@ public class Config<E extends Config.Entry> {
             worlds().putIfAbsent(name, world);
             return world;
         }
+
+        W newWorld(JsonObject json);
 
         default void removeWorld(String name) {
             worlds().remove(name);
@@ -146,9 +198,14 @@ public class Config<E extends Config.Entry> {
 
         @NotNull Map<String, W> worlds();
 
-        default void writeJson(JsonObject json) {
-            ISetting.super.writeJson(json);
+        default void readJson(JsonObject json) {
+            if (json.has("worlds")) json.getAsJsonObject("worlds").asMap().forEach((k, v) -> worlds().put(k, newWorld(v.getAsJsonObject())));
+            ISetting.super.readJson(json);
+        }
 
+        default void writeJson(JsonObject json) {
+            if (!worlds().isEmpty()) worlds().forEach((k, v) -> json.add(k, v.toJson()));
+            ISetting.super.writeJson(json);
         }
 
         default boolean canSpawn(Object reason, Object world, Object biome) {
@@ -157,7 +214,7 @@ public class Config<E extends Config.Entry> {
 
             if (rawWorld.startsWith(REGEX_TAG))
                 for (Map.Entry<String, W> entry : worlds().entrySet())
-                    if (validate(entry.getKey(), rawWorld)) return canSpawn && entry.getValue().canSpawn(reason, biome);
+                    if (matches(entry.getKey(), rawWorld)) return canSpawn && entry.getValue().canSpawn(reason, biome);
             return canSpawn && (!worlds().containsKey(rawWorld) || worlds().get(rawWorld).canSpawn(reason, biome));
         }
     }
@@ -183,6 +240,10 @@ public class Config<E extends Config.Entry> {
 
         boolean canSpawn(Object reason);
 
+        default void readJson(JsonObject json) {
+            if (this instanceof BasicSettings basicSettings) basicSettings.readJson(json);
+        }
+
         default void writeJson(JsonObject json) {
             if (this instanceof BasicSettings basicSettings) basicSettings.writeJson(json);
         }
@@ -196,8 +257,8 @@ public class Config<E extends Config.Entry> {
 
     public static abstract class BasicSettings implements ISetting {
         private final List<String> discardReasons = new ArrayList<>();
-        public Float chance;
-        public Boolean discard;
+        public float chance = 1f;
+        public boolean discard;
 
         @Override
         public @NotNull List<String> discardReasons() {
@@ -206,23 +267,32 @@ public class Config<E extends Config.Entry> {
 
         @Override
         public float chance() {
-            return chance != null? chance : 1f;
+            return chance;
         }
 
         @Override
         public boolean isDiscarded() {
-            return discard != null && discard;
+            return discard;
         }
 
         @Override
         public boolean canSpawn(Object reason) {
             if (isDiscarded()) return false;
-            return (chance == null || Math.random() <= chance) && !isDiscardedBy(reason);
+            return (chance() != 1f || Math.random() <= chance()) && !isDiscardedBy(reason);
+        }
+
+        @Override
+        public void readJson(JsonObject json) {
+            if (json.has("chance")) chance = json.getAsJsonPrimitive("chance").getAsFloat();
+            if (json.has("discardReasons")) discardReasons().addAll(GSON.fromJson(json.get("discardReasons"), new TypeToken<List<String>>() {}));
+            if (json.has("discard")) discard = json.getAsJsonPrimitive("discard").getAsBoolean();
         }
 
         @Override
         public void writeJson(JsonObject json) {
-
+            if (chance() != 1f) json.addProperty("chance", chance());
+            if (!discardReasons().isEmpty()) json.add("discardReasons", GSON.toJsonTree(discardReasons()));
+            if (isDiscarded()) json.addProperty("discard", isDiscarded());
         }
     }
 }
