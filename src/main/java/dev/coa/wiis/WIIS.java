@@ -1,15 +1,12 @@
 package dev.coa.wiis;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 public abstract class WIIS {
     private static WIIS instance;
 
     public static final String ID = "wiis";
     public static final String NAME = "Why Is It Spawn";
     public static final String VERSION = "3";
-    public static final Logger LOGGER = LoggerFactory.getLogger(ID.toUpperCase());
+    public static final org.slf4j.Logger LOGGER = org.slf4j.LoggerFactory.getLogger(ID.toUpperCase());
 
     public abstract void registerCommands();
 

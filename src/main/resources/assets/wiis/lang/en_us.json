@@ -2,12 +2,12 @@
   "wiis.unavailable": "Something went wrong. Umm, idk what to say",
   "wiis.enabled.get": "The value of \"enabled\" is: %s",
   "wiis.enabled.set": "The \"enabled\" value is now set to: %s",
-  "wiis.permissionLevel.get": "The value of \"permissionLevel\" is: %s [by default: §d4§r]",
-  "wiis.permissionLevel.set": "The \"permissionLevel\" value is now set to: %s [by default: §d4§r]",
-  "wiis.autosave.get": "The value of \"autosave\" is: %s [by default: §dtrue§r]",
-  "wiis.autosave.set": "The \"autosave\" value is now set to: %s [by default: §true§r]",
+  "wiis.permissionLevel.get": "The value of \"permissionLevel\" is: %s §7[by default: §d4§r§7]",
+  "wiis.permissionLevel.set": "The \"permissionLevel\" value is now set to: %s §7[by default: §d4§r§7]",
+  "wiis.autosave.get": "The value of \"autosave\" is: %s §7[by default: §dtrue§r§7]§r",
+  "wiis.autosave.set": "The \"autosave\" value is now set to: %s §7[by default: §true§r§7]",
   "wiis.reload": "Reloading the config",
-  "wiis.query": "The entry \"%s\" has the following properties: ",
+  "wiis.query": "The entry <%s> has the following properties: ",
   "wiis.query.discardreason.all": "In the path, <%s> found all the discard reasons: ",
   "wiis.query.discardreason.present": "In the path, <%s> a discard reason [%s] was found",
   "wiis.query.discardreason.missing": "In the path, <%s> no discard reason [%s] found",
@@ -20,7 +20,7 @@
   "wiis.restore.single": "The entry <%s> has been deleted",
   "wiis.restore.with_regex": "%d entries were deleted according to the expression <%s>",
   "wiis.restore.all": "%s entries have been deleted",
-  "wiis.restore.empty": "No entries. Nothing to clear",
+  "wiis.restore.none": "No entries. Nothing to clear",
   "wiis.entry_not_found": "The entry for <%s> was not found",
-  "wiis.info": "\n◼ by CoAmazing & decheesed"
+  "wiis.info": "\n◼ created by CoAmazing & decheesed"
 }

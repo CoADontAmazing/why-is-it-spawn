@@ -157,12 +157,12 @@ public class FabricConfig extends dev.coa.wiis.Config<FabricConfig.FabricEntry> 
         if (count != null && key != null) return Text.translatable("wiis.restore.with_regex", count, key);
         else if (count == null) return Text.translatable("wiis.restore.single", key);
         else {
-            if (count == 0) return Text.translatable("wiis.restore.empty");
+            if (count == 0) return Text.translatable("wiis.restore.none");
             return Text.translatable("wiis.restore.all", count);
         }
     };
 
-    public static final BiFunction<String, FabricEntry, MutableText> QUERY_ENTRY_TEXT = (entryKey, entry) -> Text.empty().append(Text.translatable("wiis.query", entryKey)).append(fancyMap(GSON.fromJson(entry.toJson(), Map.class)));
+    public static final BiFunction<String, FabricSettings, MutableText> QUERY_ENTRY_TEXT = (entryKey, entry) -> Text.empty().append(Text.translatable("wiis.query", entryKey)).append(fancyMap(GSON.fromJson(entry.toJson(), Map.class)));
 
     public static final BiFunction<String, Text, MutableText> QUERY_DISCARDREASONS_TEXT = (entry, text) -> Text.empty().append(Text.translatable("wiis.query.discardreason.all", entry)).append(text);
 

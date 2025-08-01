@@ -37,29 +37,30 @@ public abstract class Config<E extends Config.Entry> {
         return string.startsWith(REGEX_TAG)? regex.matches(string.substring(1)) : regex.equals(string);
     }
 
-    public static <C extends Config> C load(Path path, Class<C> type) {
+    public static <C extends Config> Optional<C> load(Path path, Class<C> type) {
         if (Files.exists(path)) try (final BufferedReader reader = Files.newBufferedReader(path)){
             return load(reader, type);
         } catch (Exception ex) {
             LOGGER.warn("[{}]: ", ID.toUpperCase(), ex);
         }
-        return null;
+        return Optional.empty();
     }
 
     @SuppressWarnings("unchecked")
-    public static <C extends Config> C load(Reader reader, Class<C> type) {
+    public static <C extends Config> Optional<C> load(Reader reader, Class<C> type) {
         try {
             JsonObject json = JsonParser.parseReader(reader).getAsJsonObject();
             C c = GSON.fromJson(json, type);
+//            c.entries.clear();
             if (json.has("entries")) json.getAsJsonObject("entries").asMap().forEach((k, v) -> c.entries.put(k, c.newEntry(v.getAsJsonObject())));
-            return c;
+            return Optional.of(c);
         } catch (Exception ex) {
             LOGGER.warn("[{}]: ", ID.toUpperCase(), ex);
         }
-        return null;
+        return Optional.empty();
     }
 
-    public static <C extends Config> C load(String string, Class<C> type) {
+    public static <C extends Config> Optional<C> load(String string, Class<C> type) {
         return load(new StringReader(string), type);
     }
 
@@ -130,9 +131,9 @@ public abstract class Config<E extends Config.Entry> {
         }
     }
 
-    public static interface Biome extends ISetting {}
+    public interface Biome extends ISetting {}
 
-    public static interface World<B extends Biome> extends ISetting {
+    public interface World<B extends Biome> extends ISetting {
         default B addBiome(String name, B biome) {
             biomes().putIfAbsent(name, biome);
             return biome;
@@ -154,16 +155,6 @@ public abstract class Config<E extends Config.Entry> {
 
         @NotNull Map<String, B> biomes();
 
-        default void readJson(JsonObject json) {
-            if (json.has("biomes")) json.getAsJsonObject("biomes").asMap().forEach((k, v) -> biomes().put(k, newBiome(v.getAsJsonObject())));
-            ISetting.super.readJson(json);
-        }
-
-        default void writeJson(JsonObject json) {
-            if (!biomes().isEmpty()) biomes().forEach((k, v) -> json.add(k, v.toJson()));
-            ISetting.super.writeJson(json);
-        }
-
         default boolean canSpawn(Object reason, Object biome) {
             var rawBiome = biome == null? REGEX_ANY : biome instanceof String s? s : biome.toString();
             var canSpawn = canSpawn(reason);
@@ -176,7 +167,7 @@ public abstract class Config<E extends Config.Entry> {
     }
 
     @SuppressWarnings("rawtypes")
-    public static interface Entry<W extends World> extends ISetting {
+    public interface Entry<W extends World> extends ISetting {
         default W addWorld(String name, W world) {
             worlds().putIfAbsent(name, world);
             return world;
@@ -198,16 +189,6 @@ public abstract class Config<E extends Config.Entry> {
 
         @NotNull Map<String, W> worlds();
 
-        default void readJson(JsonObject json) {
-            if (json.has("worlds")) json.getAsJsonObject("worlds").asMap().forEach((k, v) -> worlds().put(k, newWorld(v.getAsJsonObject())));
-            ISetting.super.readJson(json);
-        }
-
-        default void writeJson(JsonObject json) {
-            if (!worlds().isEmpty()) worlds().forEach((k, v) -> json.add(k, v.toJson()));
-            ISetting.super.writeJson(json);
-        }
-
         default boolean canSpawn(Object reason, Object world, Object biome) {
             var rawWorld = world == null? REGEX_ANY : world instanceof String s? s : world.toString();
             var canSpawn = canSpawn(reason);
@@ -219,7 +200,7 @@ public abstract class Config<E extends Config.Entry> {
         }
     }
 
-    public static interface ISetting {
+    public interface ISetting {
         default void discardReason(Object reason, boolean add) {
             if (reason == null) return;
             var rawReason = toKebabCase(reason instanceof String s? s : reason.toString());
@@ -281,8 +262,12 @@ public abstract class Config<E extends Config.Entry> {
             return (chance() != 1f || Math.random() <= chance()) && !isDiscardedBy(reason);
         }
 
+        @SuppressWarnings("unchecked")
         @Override
         public void readJson(JsonObject json) {
+            if (this instanceof Entry entry) if (json.has("worlds")) json.getAsJsonObject("worlds").asMap().forEach((k, v) -> entry.worlds().put(k, entry.newWorld(v.getAsJsonObject())));
+            if (this instanceof World world) if (json.has("biomes")) json.getAsJsonObject("biomes").asMap().forEach((k, v) -> world.biomes().put(k, world.newBiome(v.getAsJsonObject())));
+
             if (json.has("chance")) chance = json.getAsJsonPrimitive("chance").getAsFloat();
             if (json.has("discardReasons")) discardReasons().addAll(GSON.fromJson(json.get("discardReasons"), new TypeToken<List<String>>() {}));
             if (json.has("discard")) discard = json.getAsJsonPrimitive("discard").getAsBoolean();
@@ -290,6 +275,9 @@ public abstract class Config<E extends Config.Entry> {
 
         @Override
         public void writeJson(JsonObject json) {
+            if (this instanceof Entry<?> entry) if (!entry.worlds().isEmpty()) entry.worlds().forEach((k, v) -> json.add(k, v.toJson()));
+            if (this instanceof World<?> world) if (!world.biomes().isEmpty()) world.biomes().forEach((k, v) -> json.add(k, v.toJson()));
+
             if (chance() != 1f) json.addProperty("chance", chance());
             if (!discardReasons().isEmpty()) json.add("discardReasons", GSON.toJsonTree(discardReasons()));
             if (isDiscarded()) json.addProperty("discard", isDiscarded());
